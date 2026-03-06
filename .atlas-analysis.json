@@ -1,0 +1,63 @@
+{
+  "projectType": "saas",
+  "projectName": "Sistema de Gestión de Inventarios INVENTO",
+  "projectDescription": "Sistema web para digitalizar el control de stock en PYMEs, eliminando hojas de cálculo manuales y reduciendo errores humanos",
+  "theme": "almond",
+  "primaryColor": "#4A90E2",
+  "lightColor": "#6BA3E8",
+  "darkColor": "#2E5F8F",
+  "navigation": {
+    "groups": [
+      {
+        "group": "Comenzar",
+        "pages": [
+          "introduction",
+          "installation",
+          "configuration"
+        ]
+      },
+      {
+        "group": "Guías de Usuario",
+        "pages": [
+          "guides/authentication",
+          "guides/product-management",
+          "guides/inventory-movements",
+          "guides/user-roles"
+        ]
+      },
+      {
+        "group": "Desarrollo",
+        "pages": [
+          "development/database-schema",
+          "development/file-structure",
+          "development/contributing"
+        ]
+      },
+      {
+        "group": "Referencia",
+        "pages": [
+          "reference/requirements",
+          "reference/troubleshooting"
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Autenticación segura con roles (Admin/Empleado)",
+    "CRUD completo de productos con código, precio y stock",
+    "Registro automatizado de entradas y salidas de inventario",
+    "Actualización en tiempo real del stock tras cada movimiento",
+    "Validación de stock disponible antes de salidas"
+  ],
+  "publicApiSurface": [
+    "auth/login.php - Autenticación de usuarios",
+    "auth/logout.php - Cierre de sesión",
+    "productos/crear.php - Crear producto",
+    "productos/listar.php - Listar productos",
+    "productos/editar.php - Editar producto",
+    "productos/eliminar.php - Eliminar producto",
+    "movimientos/entrada.php - Registrar entrada de stock",
+    "movimientos/salida.php - Registrar salida de stock",
+    "config/conexion.php - Conexión a base de datos"
+  ]
+}
