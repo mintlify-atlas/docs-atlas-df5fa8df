@@ -1,0 +1,472 @@
+---
+title: 'File Structure'
+description: 'Complete file structure and organization of the PHP inventory management system'
+---
+
+## Project Overview
+
+The inventory management system follows a simple, functional file structure organized by feature modules. Each directory contains related PHP files that handle specific aspects of the application.
+
+## Directory Tree
+
+```
+source/
+├── index.php                 # Main dashboard/home page
+├── config/                   # Configuration files
+│   └── conexion.php         # Database connection
+├── auth/                     # Authentication module
+│   ├── login.php            # User login
+│   └── logout.php           # Session termination
+├── productos/                # Product management module
+│   ├── listar.php           # List all products
+│   ├── crear.php            # Create new product
+│   ├── editar.php           # Edit existing product
+│   └── eliminar.php         # Delete product
+└── movimientos/              # Inventory movement module
+    ├── entrada.php          # Register product entry
+    └── salida.php           # Register product exit
+```
+
+## File Descriptions
+
+### Root Level
+
+<Accordion title="index.php - Main Dashboard">
+
+**Purpose:** Landing page after successful login, displays user information and session status.
+
+**Location:** `/index.php`
+
+**Key Features:**
+- Session validation
+- Redirects to login if not authenticated
+- Displays username and role
+- Logout link
+
+```php
+session_start();
+
+if (!isset($_SESSION['usuario'])) {
+    header("Location: auth/login.php");
+    exit();
+}
+
+echo "Bienvenido, " . $_SESSION['usuario'];
+echo "Rol: " . $_SESSION['rol'];
+```
+
+**Session Requirements:**
+- `$_SESSION['usuario']` - User's name
+- `$_SESSION['rol']` - User's role (admin/usuario)
+
+</Accordion>
+
+### config/
+
+<Accordion title="conexion.php - Database Connection">
+
+**Purpose:** Establishes MySQL database connection using MySQLi.
+
+**Location:** `/config/conexion.php`
+
+**Configuration:**
+```php
+$host = "localhost";      // Database host
+$user = "root";           // Database username
+$pass = "";               // Database password
+$db   = "bd_inventario";  // Database name
+
+$conn = new mysqli($host, $user, $pass, $db);
+```
+
+**Usage Pattern:**
+Included at the top of every file that needs database access:
+```php
+include("../config/conexion.php");
+// or
+include("config/conexion.php");
+```
+
+**Global Variable:**
+- `$conn` - MySQLi connection object used throughout the application
+
+</Accordion>
+
+### auth/
+
+Authentication module handles user login and session management.
+
+<Accordion title="login.php - User Authentication">
+
+**Purpose:** Handles user login form and authentication logic.
+
+**Location:** `/auth/login.php`
+
+**Flow:**
+1. Display login form (GET request)
+2. Process credentials (POST request)
+3. Query usuarios table by email
+4. Validate password (plain text comparison)
+5. Create session variables
+6. Redirect to main page
+
+**Form Fields:**
+- `correo` (email) - User's email address
+- `password` - User's password
+- `login` (submit button)
+
+**Database Query:**
+```php
+$sql = "SELECT * FROM usuarios WHERE correo = '$correo'";
+$resultado = $conn->query($sql);
+$usuario = $resultado->fetch_assoc();
+```
+
+**Session Creation:**
+```php
+$_SESSION['usuario'] = $usuario['nombre'];
+$_SESSION['rol'] = $usuario['rol'];
+header("Location: ../index.php");
+```
+
+**Error Messages:**
+- "Usuario no encontrado" - Email doesn't exist
+- "Contraseña incorrecta" - Wrong password
+
+</Accordion>
+
+<Accordion title="logout.php - Session Termination">
+
+**Purpose:** Destroys user session and redirects to login.
+
+**Location:** `/auth/logout.php`
+
+**Implementation:**
+```php
+session_start();
+session_destroy();
+header("Location: login.php");
+exit();
+```
+
+**Accessed From:**
+- Main dashboard logout link
+- Manual navigation
+
+</Accordion>
+
+### productos/
+
+Product management module implements full CRUD operations.
+
+<Accordion title="listar.php - Product List & Navigation Hub">
+
+**Purpose:** Displays all products in a table with action links.
+
+**Location:** `/productos/listar.php`
+
+**Query:**
+```php
+$resultado = $conn->query("SELECT * FROM productos");
+```
+
+**Display Columns:**
+- ID
+- Nombre (name)
+- Código (product code)
+- Precio (price)
+- Stock (current quantity)
+- Acciones (edit/delete links)
+
+**Navigation Links:**
+- `crear.php` - Add new product
+- `editar.php?id={id}` - Edit product
+- `eliminar.php?id={id}` - Delete product
+- `../movimientos/entrada.php` - Register entry
+- `../movimientos/salida.php` - Register exit
+- `../index.php` - Back to home
+
+**Features:**
+- Delete confirmation dialog
+- Direct links to movement registration
+- Real-time stock display
+
+</Accordion>
+
+<Accordion title="crear.php - Create New Product">
+
+**Purpose:** Form and logic for creating new products.
+
+**Location:** `/productos/crear.php`
+
+**Form Fields:**
+- `nombre` - Product name (text, required)
+- `codigo` - Product code/SKU (text, required)
+- `precio` - Price (number, decimal, required)
+
+**Insert Query:**
+```php
+$sql = "INSERT INTO productos (nombre, codigo, precio)
+        VALUES ('$nombre', '$codigo', '$precio')";
+
+if ($conn->query($sql)) {
+    header("Location: listar.php");
+}
+```
+
+**Note:** Initial stock is set to 0 by database default. Stock is managed through movimientos.
+
+</Accordion>
+
+<Accordion title="editar.php - Edit Existing Product">
+
+**Purpose:** Form and logic for updating product information.
+
+**Location:** `/productos/editar.php`
+
+**URL Parameter:**
+- `id` - Product ID to edit (GET parameter)
+
+**Load Product:**
+```php
+$id = $_GET['id'];
+$producto = $conn->query("SELECT * FROM productos WHERE id=$id")
+            ->fetch_assoc();
+```
+
+**Update Query:**
+```php
+$conn->query("UPDATE productos 
+              SET nombre='$nombre', codigo='$codigo', precio='$precio'
+              WHERE id=$id");
+```
+
+**Editable Fields:**
+- nombre
+- codigo
+- precio
+
+**Note:** Stock is NOT editable here - it's managed automatically through movimientos.
+
+</Accordion>
+
+<Accordion title="eliminar.php - Delete Product">
+
+**Purpose:** Deletes a product from the database.
+
+**Location:** `/productos/eliminar.php`
+
+**URL Parameter:**
+- `id` - Product ID to delete (GET parameter)
+
+**Implementation:**
+```php
+$id = $_GET['id'];
+$conn->query("DELETE FROM productos WHERE id=$id");
+header("Location: listar.php");
+```
+
+**Cascade Effect:**
+Due to foreign key constraint, all related movimientos records are automatically deleted (ON DELETE CASCADE).
+
+**Confirmation:**
+Handled by JavaScript confirm dialog in listar.php:
+```javascript
+onclick="return confirm('¿Eliminar producto?')"
+```
+
+</Accordion>
+
+### movimientos/
+
+Inventory movement module handles stock entries and exits.
+
+<Accordion title="entrada.php - Stock Entry Registration">
+
+**Purpose:** Register incoming inventory and increase stock.
+
+**Location:** `/movimientos/entrada.php`
+
+**Form Fields:**
+- `producto_id` - Product selection dropdown (from productos table)
+- `cantidad` - Quantity to add (number, min=1)
+
+**Two-Step Process:**
+
+**Step 1: Record Movement**
+```php
+$conn->query("INSERT INTO movimientos (producto_id, tipo, cantidad)
+              VALUES ($producto_id, 'entrada', $cantidad)");
+```
+
+**Step 2: Update Stock**
+```php
+$conn->query("UPDATE productos 
+              SET stock = stock + $cantidad 
+              WHERE id = $producto_id");
+```
+
+**Flow:**
+1. Display form with product dropdown
+2. User selects product and enters quantity
+3. Insert movement record
+4. Increment product stock
+5. Redirect to product list
+
+</Accordion>
+
+<Accordion title="salida.php - Stock Exit Registration">
+
+**Purpose:** Register outgoing inventory and decrease stock with validation.
+
+**Location:** `/movimientos/salida.php`
+
+**Form Fields:**
+- `producto_id` - Product selection dropdown
+- `cantidad` - Quantity to remove (number, min=1)
+
+**Three-Step Process:**
+
+**Step 1: Validate Stock**
+```php
+$producto = $conn->query("SELECT stock FROM productos WHERE id=$producto_id")
+            ->fetch_assoc();
+
+if ($producto['stock'] >= $cantidad) {
+    // Proceed with exit
+} else {
+    $error = "Stock insuficiente";
+}
+```
+
+**Step 2: Record Movement**
+```php
+$conn->query("INSERT INTO movimientos (producto_id, tipo, cantidad)
+              VALUES ($producto_id, 'salida', $cantidad)");
+```
+
+**Step 3: Update Stock**
+```php
+$conn->query("UPDATE productos 
+              SET stock = stock - $cantidad 
+              WHERE id = $producto_id");
+```
+
+**Validation:**
+Prevents negative stock by checking available quantity before processing.
+
+</Accordion>
+
+## Common Patterns
+
+### Session Management
+
+Every protected page follows this pattern:
+
+```php
+session_start();
+include("../config/conexion.php");
+
+// Check authentication
+if (!isset($_SESSION['usuario'])) {
+    header("Location: ../auth/login.php");
+    exit();
+}
+```
+
+### Form Processing
+
+All forms use POST method with named submit buttons:
+
+```php
+if (isset($_POST['button_name'])) {
+    // Process form data
+    $field = $_POST['field_name'];
+    
+    // Execute query
+    $conn->query($sql);
+    
+    // Redirect on success
+    header("Location: destination.php");
+    exit();
+}
+```
+
+### Database Operations
+
+**Query Execution:**
+```php
+$resultado = $conn->query($sql);
+```
+
+**Fetch Single Row:**
+```php
+$row = $resultado->fetch_assoc();
+```
+
+**Fetch Multiple Rows:**
+```php
+while ($row = $resultado->fetch_assoc()) {
+    // Process each row
+}
+```
+
+### Navigation Structure
+
+```
+index.php
+  └─> productos/listar.php (main hub)
+       ├─> crear.php
+       ├─> editar.php?id=X
+       ├─> eliminar.php?id=X
+       ├─> movimientos/entrada.php
+       └─> movimientos/salida.php
+
+auth/
+  ├─> login.php (entry point)
+  └─> logout.php (exit point)
+```
+
+## Module Dependencies
+
+```
+config/conexion.php
+  ├─ Required by: ALL modules
+  └─ Provides: $conn (MySQLi object)
+
+auth/login.php
+  ├─ Creates: $_SESSION['usuario'], $_SESSION['rol']
+  └─ Required by: ALL protected pages
+
+productos/*
+  ├─ Depends on: config/conexion.php, session
+  └─ Used by: movimientos/*
+
+movimientos/*
+  ├─ Depends on: config/conexion.php, session, productos table
+  └─ Modifies: productos.stock
+```
+
+## File Naming Conventions
+
+- **Module directories**: lowercase, plural (productos, movimientos)
+- **PHP files**: lowercase, descriptive verbs (crear, editar, eliminar, listar)
+- **Action files**: verb-based naming (entrada, salida, login, logout)
+- **Config files**: descriptive nouns (conexion)
+
+## HTTP Methods
+
+- **GET**: Display forms, list data, navigation
+- **POST**: Submit forms, create/update/delete operations
+- **URL Parameters**: Pass entity IDs (e.g., `?id=5`)
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Database Schema" icon="database" href="/development/database-schema">
+    Explore the complete database structure
+  </Card>
+  <Card title="Contributing" icon="code-pull-request" href="/development/contributing">
+    Learn how to contribute to the project
+  </Card>
+</CardGroup>

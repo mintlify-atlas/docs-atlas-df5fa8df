@@ -1,0 +1,247 @@
+---
+title: 'Instalación'
+description: 'Guía completa para instalar y configurar el sistema de inventario PHP con XAMPP'
+---
+
+## Requisitos del Sistema
+
+Antes de comenzar la instalación, asegúrate de cumplir con los siguientes requisitos:
+
+- **XAMPP** 7.4 o superior (incluye Apache, MySQL y PHP)
+- **Navegador web** moderno (Chrome, Firefox, Edge)
+- Al menos **100 MB** de espacio en disco
+- Sistema operativo: Windows, Linux o macOS
+
+<Note>
+Este sistema fue desarrollado como proyecto formativo para el programa Técnico en Programación de Software - SENA y está diseñado para pequeñas y medianas empresas.
+</Note>
+
+## Instalación de XAMPP
+
+Si aún no tienes XAMPP instalado, sigue estos pasos:
+
+<Steps>
+  <Step title="Descargar XAMPP">
+    Visita [https://www.apachefriends.org](https://www.apachefriends.org) y descarga la versión compatible con tu sistema operativo.
+  </Step>
+
+  <Step title="Ejecutar el instalador">
+    Ejecuta el archivo descargado y sigue el asistente de instalación. Asegúrate de seleccionar los componentes **Apache**, **MySQL** y **PHP**.
+  </Step>
+
+  <Step title="Completar la instalación">
+    Instala XAMPP en la ruta predeterminada (generalmente `C:\xampp` en Windows o `/opt/lampp` en Linux).
+  </Step>
+
+  <Step title="Iniciar los servicios">
+    Abre el Panel de Control de XAMPP y activa los módulos **Apache** y **MySQL**.
+    
+    <Tip>
+    En Linux, puedes iniciar XAMPP desde la terminal con: `sudo /opt/lampp/lampp start`
+    </Tip>
+  </Step>
+</Steps>
+
+## Instalación del Sistema
+
+<Steps>
+  <Step title="Obtener los archivos del sistema">
+    Descarga o clona el repositorio del sistema en tu máquina local.
+    
+    ```bash
+    git clone https://github.com/tu-usuario/sistema-inventario-php.git
+    ```
+    
+    O descarga el archivo ZIP y extráelo.
+  </Step>
+
+  <Step title="Copiar archivos a htdocs">
+    Copia la carpeta del proyecto a la carpeta `htdocs` de XAMPP:
+    
+    **Windows:**
+    ```bash
+    C:\xampp\htdocs\inventario
+    ```
+    
+    **Linux/macOS:**
+    ```bash
+    /opt/lampp/htdocs/inventario
+    ```
+    
+    <Warning>
+    Asegúrate de que la carpeta se llame exactamente `inventario` para que las rutas del sistema funcionen correctamente.
+    </Warning>
+  </Step>
+
+  <Step title="Crear la base de datos">
+    Abre tu navegador y accede a phpMyAdmin:
+    
+    ```
+    http://localhost/phpmyadmin
+    ```
+    
+    Crea una nueva base de datos llamada **`bd_inventario`**:
+    
+    1. Haz clic en "Nueva" en el panel izquierdo
+    2. Ingresa el nombre: `bd_inventario`
+    3. Selecciona la codificación: `utf8_general_ci`
+    4. Haz clic en "Crear"
+  </Step>
+
+  <Step title="Crear las tablas de la base de datos">
+    Ejecuta las siguientes consultas SQL en phpMyAdmin (pestaña SQL) para crear la estructura de la base de datos:
+    
+    ```sql
+    -- Tabla de usuarios
+    CREATE TABLE usuarios (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        nombre VARCHAR(100) NOT NULL,
+        correo VARCHAR(100) UNIQUE NOT NULL,
+        contraseña VARCHAR(255) NOT NULL,
+        rol ENUM('Admin', 'Empleado') DEFAULT 'Empleado',
+        fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Tabla de productos
+    CREATE TABLE productos (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        nombre VARCHAR(150) NOT NULL,
+        codigo VARCHAR(50) UNIQUE NOT NULL,
+        precio DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+        stock INT NOT NULL DEFAULT 0,
+        fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    );
+
+    -- Tabla de movimientos
+    CREATE TABLE movimientos (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        producto_id INT NOT NULL,
+        tipo ENUM('entrada', 'salida') NOT NULL,
+        cantidad INT NOT NULL,
+        fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (producto_id) REFERENCES productos(id) ON DELETE CASCADE
+    );
+    ```
+  </Step>
+
+  <Step title="Insertar usuario administrador">
+    Crea un usuario administrador para acceder al sistema:
+    
+    ```sql
+    INSERT INTO usuarios (nombre, correo, contraseña, rol)
+    VALUES ('Administrador', 'admin@inventario.com', 'admin123', 'Admin');
+    ```
+    
+    <Warning>
+    Este sistema actualmente usa contraseñas en texto plano. Se recomienda implementar hashing con `password_hash()` antes de usar en producción.
+    </Warning>
+  </Step>
+
+  <Step title="Verificar la configuración de conexión">
+    Abre el archivo `config/conexion.php` y verifica que los parámetros de conexión sean correctos:
+    
+    ```php config/conexion.php
+    <?php
+    $host = "localhost";
+    $user = "root";
+    $pass = "";
+    $db   = "bd_inventario";
+
+    $conn = new mysqli($host, $user, $pass, $db);
+
+    if ($conn->connect_error) {
+        die("Error de conexión: " . $conn->connect_error);
+    }
+    ?>
+    ```
+    
+    <Info>
+    En una instalación estándar de XAMPP, el usuario es `root` y la contraseña está vacía por defecto.
+    </Info>
+  </Step>
+</Steps>
+
+## Verificar la Instalación
+
+<Steps>
+  <Step title="Acceder al sistema">
+    Abre tu navegador y accede a:
+    
+    ```
+    http://localhost/inventario
+    ```
+    
+    Deberías ser redirigido automáticamente a la página de inicio de sesión.
+  </Step>
+
+  <Step title="Iniciar sesión">
+    Usa las credenciales del administrador que creaste:
+    
+    - **Correo:** `admin@inventario.com`
+    - **Contraseña:** `admin123`
+  </Step>
+
+  <Step title="Explorar el sistema">
+    Una vez dentro, verás el panel principal con tu nombre de usuario y rol. Desde aquí puedes acceder a:
+    
+    - Gestión de productos
+    - Registro de entradas
+    - Registro de salidas
+  </Step>
+</Steps>
+
+<Info>
+Si encuentras el mensaje "Error de conexión", verifica que los servicios de Apache y MySQL estén activos en el Panel de Control de XAMPP.
+</Info>
+
+## Datos de Prueba (Opcional)
+
+Para probar el sistema con datos de ejemplo, puedes ejecutar las siguientes consultas:
+
+```sql
+-- Insertar productos de prueba
+INSERT INTO productos (nombre, codigo, precio, stock) VALUES
+('Laptop HP 15', 'LAP001', 1299.99, 10),
+('Mouse Logitech', 'MOU001', 29.99, 50),
+('Teclado Mecánico', 'TEC001', 89.99, 25),
+('Monitor Samsung 24"', 'MON001', 199.99, 15),
+('Impresora Canon', 'IMP001', 249.99, 8);
+
+-- Insertar usuario empleado de prueba
+INSERT INTO usuarios (nombre, correo, contraseña, rol)
+VALUES ('Juan Pérez', 'empleado@inventario.com', 'empleado123', 'Empleado');
+```
+
+## Solución de Problemas Comunes
+
+### Apache no inicia
+
+<Tip>
+Verifica que no haya otro servicio usando el puerto 80. Puedes cambiar el puerto de Apache editando el archivo `httpd.conf` en la carpeta `conf` de XAMPP.
+</Tip>
+
+### MySQL no inicia
+
+<Tip>
+Verifica que el puerto 3306 esté disponible. En Windows, asegúrate de que no tengas otro servidor MySQL instalado que esté usando ese puerto.
+</Tip>
+
+### Error "Access denied for user 'root'@'localhost'"
+
+Si MySQL tiene contraseña configurada, actualiza el archivo `config/conexion.php` con la contraseña correcta en la variable `$pass`.
+
+### La página muestra código PHP en lugar de ejecutarse
+
+<Warning>
+Esto indica que Apache no está procesando PHP correctamente. Verifica que el módulo PHP esté activo en XAMPP y reinicia Apache.
+</Warning>
+
+## Próximos Pasos
+
+Ahora que has instalado el sistema exitosamente, puedes:
+
+- Leer la [Guía de Configuración](/configuration) para personalizar el sistema
+- Explorar las funcionalidades de gestión de productos
+- Configurar usuarios adicionales con diferentes roles
+- Comenzar a registrar tu inventario

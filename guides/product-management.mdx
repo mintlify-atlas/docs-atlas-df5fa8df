@@ -1,0 +1,426 @@
+---
+title: Gestión de Productos
+description: Guía completa para crear, editar, listar y eliminar productos en el inventario
+---
+
+# Gestión de Productos
+
+El módulo de productos es el corazón del sistema INVENTO. Permite realizar operaciones CRUD (Crear, Leer, Actualizar, Eliminar) sobre el catálogo de artículos de tu inventario.
+
+## Listar Productos
+
+La vista principal de productos muestra todos los artículos registrados en el sistema.
+
+### Acceso
+
+Navega a `http://localhost/inventario/productos/listar.php` después de autenticarte.
+
+### Información Mostrada
+
+La tabla de productos (`productos/listar.php:17-44`) muestra las siguientes columnas:
+
+```php productos/listar.php
+<table border="1">
+<tr>
+    <th>ID</th>
+    <th>Nombre</th>
+    <th>Código</th>
+    <th>Precio</th>
+    <th>Stock</th>
+    <th>Acciones</th>
+</tr>
+
+<?php while ($p = $resultado->fetch_assoc()) { ?>
+<tr>
+    <td><?= $p['id'] ?></td>
+    <td><?= $p['nombre'] ?></td>
+    <td><?= $p['codigo'] ?></td>
+    <td><?= $p['precio'] ?></td>
+    <td><?= $p['stock'] ?></td>
+    <td>
+        <a href="editar.php?id=<?= $p['id'] ?>">Editar</a>
+        |
+        <a href="eliminar.php?id=<?= $p['id'] ?>"
+           onclick="return confirm('¿Eliminar producto?')">
+           Eliminar
+        </a>
+    </td>
+</tr>
+<?php } ?>
+</table>
+```
+
+<Info>
+  **Campos mostrados**:
+  - **ID**: Identificador único del producto (auto-incremental)
+  - **Nombre**: Nombre descriptivo del artículo
+  - **Código**: Código único de identificación (SKU, código de barras, etc.)
+  - **Precio**: Precio unitario del producto
+  - **Stock**: Cantidad disponible en inventario
+</Info>
+
+### Navegación Rápida
+
+Desde la lista de productos puedes acceder a:
+
+- **Nuevo producto**: Botón para crear un nuevo artículo
+- **Entrada/Salida**: Enlaces rápidos para registrar movimientos de inventario
+- **Editar**: Modificar información de un producto específico
+- **Eliminar**: Borrar un producto del sistema
+
+## Crear Producto
+
+Agregar nuevos productos al inventario es un proceso simple de tres pasos.
+
+<Steps>
+  <Step title="Acceder al formulario de creación">
+    Desde la lista de productos, haz clic en **Nuevo producto** o navega directamente a `productos/crear.php`.
+  </Step>
+  
+  <Step title="Completar el formulario">
+    Ingresa la información requerida:
+    - **Nombre**: Descripción del producto (ej: "Laptop Dell Inspiron 15")
+    - **Código**: Identificador único (ej: "LAPTOP-001" o código de barras)
+    - **Precio**: Precio unitario en formato decimal (ej: 2500.00)
+  </Step>
+  
+  <Step title="Guardar el producto">
+    Haz clic en el botón **Guardar**. Si todo es correcto, serás redirigido a la lista de productos con el nuevo artículo agregado.
+  </Step>
+</Steps>
+
+### Formulario de Creación
+
+El formulario en `productos/crear.php:26-37` solicita la siguiente información:
+
+```php productos/crear.php
+<form method="POST">
+    Nombre:<br>
+    <input type="text" name="nombre" required><br><br>
+
+    Código:<br>
+    <input type="text" name="codigo" required><br><br>
+
+    Precio:<br>
+    <input type="number" step="0.01" name="precio" required><br><br>
+
+    <button name="guardar">Guardar</button>
+</form>
+```
+
+### Procesamiento en el Backend
+
+Cuando se envía el formulario, el código en `productos/crear.php:5-19` procesa los datos:
+
+```php productos/crear.php
+if (isset($_POST['guardar'])) {
+    $nombre = $_POST['nombre'];
+    $codigo = $_POST['codigo'];
+    $precio = $_POST['precio'];
+
+    $sql = "INSERT INTO productos (nombre, codigo, precio)
+            VALUES ('$nombre', '$codigo', '$precio')";
+
+    if ($conn->query($sql)) {
+        header("Location: listar.php");
+        exit();
+    } else {
+        $error = "Error al guardar producto";
+    }
+}
+```
+
+<Note>
+  **Stock inicial**: Al crear un producto, el stock se inicializa automáticamente en 0. Para agregar inventario, usa el módulo de [Movimientos de Inventario](/guides/inventory-movements) para registrar una entrada.
+</Note>
+
+<Warning>
+  **Códigos únicos**: Aunque el sistema actualmente no lo valida, se recomienda usar códigos únicos para cada producto. Considera agregar una restricción `UNIQUE` en la columna `codigo` de la tabla para evitar duplicados.
+</Warning>
+
+## Editar Producto
+
+Puedes modificar la información de productos existentes en cualquier momento.
+
+<Steps>
+  <Step title="Seleccionar producto a editar">
+    En la lista de productos, haz clic en **Editar** junto al producto que deseas modificar. Serás redirigido a `productos/editar.php?id=X` donde X es el ID del producto.
+  </Step>
+  
+  <Step title="Modificar información">
+    El formulario se cargará con los datos actuales del producto. Modifica los campos que necesites:
+    - Nombre
+    - Código
+    - Precio
+    
+    <Info>
+      **El stock no se edita aquí**. Para ajustar el stock, usa los movimientos de entrada/salida que mantienen trazabilidad completa.
+    </Info>
+  </Step>
+  
+  <Step title="Guardar cambios">
+    Haz clic en **Actualizar** para guardar los cambios. Serás redirigido a la lista de productos con los datos actualizados.
+  </Step>
+</Steps>
+
+### Formulario de Edición
+
+El formulario de edición (`productos/editar.php:25-36`) pre-carga los datos del producto:
+
+```php productos/editar.php
+<form method="POST">
+    Nombre:<br>
+    <input type="text" name="nombre" value="<?= $producto['nombre'] ?>" required><br><br>
+
+    Código:<br>
+    <input type="text" name="codigo" value="<?= $producto['codigo'] ?>" required><br><br>
+
+    Precio:<br>
+    <input type="number" step="0.01" name="precio" value="<?= $producto['precio'] ?>" required><br><br>
+
+    <button name="actualizar">Actualizar</button>
+</form>
+```
+
+### Actualización en la Base de Datos
+
+El código en `productos/editar.php:7-18` procesa la actualización:
+
+```php productos/editar.php
+if (isset($_POST['actualizar'])) {
+    $nombre = $_POST['nombre'];
+    $codigo = $_POST['codigo'];
+    $precio = $_POST['precio'];
+
+    $conn->query("UPDATE productos 
+                  SET nombre='$nombre', codigo='$codigo', precio='$precio'
+                  WHERE id=$id");
+
+    header("Location: listar.php");
+    exit();
+}
+```
+
+<Tip>
+  **Historial de cambios**: Considera agregar una tabla de auditoría que registre quién modificó qué producto y cuándo. Esto es especialmente útil en entornos con múltiples usuarios.
+</Tip>
+
+## Eliminar Producto
+
+La eliminación de productos es una acción permanente que debe usarse con precaución.
+
+<Warning>
+  **Acción irreversible**: Al eliminar un producto, se borra permanentemente de la base de datos. Asegúrate de que realmente deseas eliminar el producto antes de confirmar.
+</Warning>
+
+### Proceso de Eliminación
+
+<Steps>
+  <Step title="Seleccionar producto a eliminar">
+    En la lista de productos, haz clic en **Eliminar** junto al producto que deseas borrar.
+  </Step>
+  
+  <Step title="Confirmar eliminación">
+    Aparecerá una confirmación JavaScript preguntando "¿Eliminar producto?". Esta es tu última oportunidad para cancelar la acción.
+    
+    ```javascript
+    onclick="return confirm('¿Eliminar producto?')"
+    ```
+  </Step>
+  
+  <Step title="Producto eliminado">
+    Si confirmas, el producto será eliminado y serás redirigido a la lista actualizada.
+  </Step>
+</Steps>
+
+### Código de Eliminación
+
+El script de eliminación (`productos/eliminar.php:1-11`) es muy directo:
+
+```php productos/eliminar.php
+<?php
+session_start();
+include("../config/conexion.php");
+
+$id = $_GET['id'];
+
+$conn->query("DELETE FROM productos WHERE id=$id");
+
+header("Location: listar.php");
+exit();
+```
+
+<Warning>
+  **Integridad referencial**: Si tienes movimientos de inventario asociados a un producto, eliminar el producto puede causar problemas de integridad referencial. Considera:
+  - Agregar una restricción `FOREIGN KEY` con `ON DELETE CASCADE` en la tabla `movimientos`
+  - O implementar una "eliminación suave" (soft delete) que marque el producto como inactivo en lugar de eliminarlo
+</Warning>
+
+## Estructura de Datos del Producto
+
+Cada producto en la base de datos contiene los siguientes campos:
+
+<ParamField path="id" type="integer" required>
+  Identificador único auto-incremental. Clave primaria de la tabla.
+</ParamField>
+
+<ParamField path="nombre" type="string" required>
+  Nombre descriptivo del producto. Campo de texto sin límite específico.
+</ParamField>
+
+<ParamField path="codigo" type="string" required>
+  Código único de identificación del producto (SKU, código de barras, etc.).
+</ParamField>
+
+<ParamField path="precio" type="decimal(10,2)" required>
+  Precio unitario del producto. Soporta hasta 2 decimales.
+</ParamField>
+
+<ParamField path="stock" type="integer">
+  Cantidad disponible en inventario. Se actualiza automáticamente con los movimientos de entrada/salida. Valor por defecto: 0.
+</ParamField>
+
+## Consultas SQL Utilizadas
+
+Estas son las operaciones SQL que el sistema ejecuta para gestionar productos:
+
+<Tabs>
+  <Tab title="Listar todos los productos">
+    ```sql
+    SELECT * FROM productos
+    ```
+    Recupera todos los productos registrados con toda su información.
+  </Tab>
+  
+  <Tab title="Crear producto">
+    ```sql
+    INSERT INTO productos (nombre, codigo, precio)
+    VALUES ('$nombre', '$codigo', '$precio')
+    ```
+    Inserta un nuevo producto. El stock se inicializa en 0 automáticamente.
+  </Tab>
+  
+  <Tab title="Obtener producto por ID">
+    ```sql
+    SELECT * FROM productos WHERE id=$id
+    ```
+    Recupera un producto específico por su ID.
+  </Tab>
+  
+  <Tab title="Actualizar producto">
+    ```sql
+    UPDATE productos 
+    SET nombre='$nombre', codigo='$codigo', precio='$precio'
+    WHERE id=$id
+    ```
+    Modifica la información de un producto existente.
+  </Tab>
+  
+  <Tab title="Eliminar producto">
+    ```sql
+    DELETE FROM productos WHERE id=$id
+    ```
+    Elimina permanentemente un producto de la base de datos.
+  </Tab>
+</Tabs>
+
+## Mejoras Recomendadas
+
+Estas son algunas mejoras que puedes implementar en el módulo de productos:
+
+<CardGroup cols={2}>
+  <Card title="Validación de código único" icon="check-double">
+    ```php
+    $check = $conn->query(
+      "SELECT id FROM productos WHERE codigo='$codigo'"
+    );
+    if ($check->num_rows > 0) {
+        $error = "El código ya existe";
+    }
+    ```
+  </Card>
+  
+  <Card title="Búsqueda y filtros" icon="magnifying-glass">
+    Agregar un campo de búsqueda para filtrar productos por nombre o código.
+  </Card>
+  
+  <Card title="Categorías de productos" icon="tags">
+    Crear una tabla de categorías y relacionarla con productos para mejor organización.
+  </Card>
+  
+  <Card title="Imágenes de productos" icon="image">
+    Permitir subir fotos de los productos para identificación visual.
+  </Card>
+  
+  <Card title="Stock mínimo/máximo" icon="chart-line">
+    Agregar alertas cuando el stock caiga por debajo de un umbral mínimo.
+  </Card>
+  
+  <Card title="Historial de precios" icon="clock">
+    Registrar cambios de precio con fecha para análisis histórico.
+  </Card>
+</CardGroup>
+
+## Solución de Problemas
+
+<Accordion title="Error al guardar: Duplicate entry">
+  Este error ocurre si intentas insertar un código o ID que ya existe. Asegúrate de que:
+  - Los códigos de producto sean únicos
+  - No estés intentando insertar manualmente un ID que ya existe
+  - La tabla tenga configurada correctamente la columna `id` como AUTO_INCREMENT
+</Accordion>
+
+<Accordion title="El precio no se guarda con decimales">
+  Verifica que:
+  - El campo en la base de datos sea tipo `DECIMAL(10,2)` y no `INT`
+  - El formulario use `step="0.01"` en el input de tipo number
+  - No estés casteando el valor a entero en el código PHP
+</Accordion>
+
+<Accordion title="El stock no se actualiza">
+  El stock NO se edita directamente en este módulo. Para modificar el stock:
+  - Usa el módulo de Entradas en la página de [Movimientos de Inventario](/guides/inventory-movements) para aumentar stock
+  - Usa el módulo de Salidas en la página de [Movimientos de Inventario](/guides/inventory-movements) para disminuir stock
+  
+  Esto mantiene un historial completo de todos los movimientos de inventario.
+</Accordion>
+
+<Accordion title="Productos eliminados reaparecen">
+  Si los productos "reaparecen" después de eliminarlos:
+  - Verifica que la consulta DELETE se esté ejecutando correctamente
+  - Revisa los permisos del usuario MySQL para ejecutar DELETE
+  - Comprueba que no haya scripts de sincronización o backups restaurando datos antiguos
+</Accordion>
+
+## Seguridad
+
+<Warning>
+  **Inyección SQL**: El código actual es vulnerable a inyección SQL porque usa concatenación directa de variables en las consultas. En producción, usa consultas preparadas:
+  
+  ```php
+  // En lugar de:
+  $sql = "INSERT INTO productos (nombre, codigo, precio) VALUES ('$nombre', '$codigo', '$precio')";
+  
+  // Usa:
+  $stmt = $conn->prepare("INSERT INTO productos (nombre, codigo, precio) VALUES (?, ?, ?)");
+  $stmt->bind_param("ssd", $nombre, $codigo, $precio);
+  $stmt->execute();
+  ```
+</Warning>
+
+## Próximos Pasos
+
+<CardGroup cols={2}>
+  <Card title="Movimientos de Inventario" icon="dolly" href="/guides/inventory-movements">
+    Aprende a registrar entradas y salidas de productos
+  </Card>
+  <Card title="Estructura de la Base de Datos" icon="database" href="/development/database-schema">
+    Entiende el esquema completo de la base de datos
+  </Card>
+  <Card title="Roles de Usuario" icon="users" href="/guides/user-roles">
+    Configura permisos para restricciones por rol
+  </Card>
+  <Card title="Solución de Problemas" icon="wrench" href="/reference/troubleshooting">
+    Resuelve problemas comunes del sistema
+  </Card>
+</CardGroup>

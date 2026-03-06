@@ -1,0 +1,272 @@
+---
+title: 'Requisitos del Sistema'
+description: 'Requisitos técnicos necesarios para instalar y ejecutar el sistema de inventarios'
+---
+
+## Requisitos Previos
+
+Antes de instalar el sistema de gestión de inventarios, asegúrate de cumplir con los siguientes requisitos técnicos.
+
+### Servidor Local
+
+<Card title="XAMPP" icon="server">
+  El sistema requiere XAMPP como entorno de desarrollo local.
+</Card>
+
+**Descarga:** [https://www.apachefriends.org/](https://www.apachefriends.org/)
+
+**Versión recomendada:** XAMPP 8.0 o superior
+
+<Warning>
+  Asegúrate de descargar la versión de XAMPP que incluya PHP 7.4 o superior para garantizar la compatibilidad con todas las funcionalidades del sistema.
+</Warning>
+
+---
+
+## Requisitos del Servidor
+
+### Apache
+
+- **Versión mínima:** Apache 2.4+
+- **Módulos requeridos:**
+  - `mod_rewrite` (para redirecciones)
+  - `mod_php` (para procesamiento PHP)
+
+<Tip>
+  XAMPP viene con Apache preconfigurado, no necesitas instalación adicional.
+</Tip>
+
+### PHP
+
+<CardGroup cols={2}>
+  <Card title="Versión" icon="code">
+    PHP 7.4 o superior
+  </Card>
+  <Card title="Recomendado" icon="star">
+    PHP 8.0+
+  </Card>
+</CardGroup>
+
+#### Extensiones PHP Requeridas
+
+Las siguientes extensiones PHP deben estar habilitadas:
+
+- **mysqli** - Para conexión con MySQL
+- **session** - Para manejo de sesiones de usuario
+- **json** - Para procesamiento de datos
+- **mbstring** - Para manejo de caracteres UTF-8
+
+<Accordion title="Verificar extensiones PHP habilitadas">
+  Puedes verificar las extensiones habilitadas creando un archivo `info.php` en tu carpeta `htdocs`:
+
+  ```php
+  <?php
+  phpinfo();
+  ?>
+  ```
+
+  Luego accede a `http://localhost/info.php` en tu navegador.
+
+  <Warning>
+    Elimina este archivo después de verificar por razones de seguridad.
+  </Warning>
+</Accordion>
+
+#### Configuración PHP Recomendada
+
+Edita el archivo `php.ini` de XAMPP con las siguientes configuraciones:
+
+```ini
+upload_max_filesize = 20M
+post_max_size = 20M
+max_execution_time = 300
+memory_limit = 256M
+session.gc_maxlifetime = 3600
+date.timezone = America/Bogota
+```
+
+<Tip>
+  El archivo `php.ini` se encuentra en: `C:\xampp\php\php.ini` (Windows) o `/opt/lampp/etc/php.ini` (Linux)
+</Tip>
+
+---
+
+### MySQL
+
+<CardGroup cols={2}>
+  <Card title="Versión" icon="database">
+    MySQL 5.7 o superior
+  </Card>
+  <Card title="Recomendado" icon="star">
+    MySQL 8.0+
+  </Card>
+</CardGroup>
+
+#### Configuración de Base de Datos
+
+El sistema requiere:
+
+- **Nombre de la base de datos:** `bd_inventario`
+- **Usuario por defecto:** `root`
+- **Contraseña por defecto:** (vacía)
+- **Host:** `localhost`
+- **Puerto:** `3306`
+
+<Warning>
+  En producción, NUNCA uses el usuario `root` sin contraseña. Crea un usuario específico con permisos limitados.
+</Warning>
+
+#### Tablas Requeridas
+
+El sistema utiliza las siguientes tablas principales:
+
+- `usuarios` - Autenticación y roles
+- `productos` - Catálogo de productos
+- `movimientos` - Registro de entradas/salidas
+
+---
+
+## Navegadores Compatibles
+
+El sistema es compatible con los siguientes navegadores web:
+
+<CardGroup cols={2}>
+  <Card title="Google Chrome" icon="chrome">
+    Versión 90+
+  </Card>
+  <Card title="Mozilla Firefox" icon="firefox">
+    Versión 88+
+  </Card>
+  <Card title="Microsoft Edge" icon="edge">
+    Versión 90+
+  </Card>
+  <Card title="Safari" icon="safari">
+    Versión 14+
+  </Card>
+</CardGroup>
+
+<Info>
+  Se recomienda mantener el navegador actualizado a la última versión estable para mejor rendimiento y seguridad.
+</Info>
+
+### Compatibilidad Mobile
+
+El sistema es accesible desde navegadores móviles:
+
+- **iOS:** Safari 14+ / Chrome 90+
+- **Android:** Chrome 90+ / Firefox 88+
+
+<Note>
+  La interfaz actual no está completamente optimizada para dispositivos móviles. Se recomienda usar en pantallas de escritorio o tablet.
+</Note>
+
+---
+
+## Requisitos de Hardware
+
+### Servidor de Desarrollo
+
+**Mínimo:**
+- Procesador: Intel Core i3 o equivalente
+- RAM: 4 GB
+- Espacio en disco: 2 GB disponibles
+- Conexión a Internet (para instalación inicial)
+
+**Recomendado:**
+- Procesador: Intel Core i5 o superior
+- RAM: 8 GB o más
+- Espacio en disco: 5 GB disponibles
+- SSD para mejor rendimiento
+
+---
+
+## Requisitos del Sistema Operativo
+
+<Tabs>
+  <Tab title="Windows">
+    - Windows 7, 8, 10, o 11 (32-bit o 64-bit)
+    - .NET Framework 4.0 o superior (para algunas herramientas de XAMPP)
+    - Microsoft Visual C++ Redistributable (incluido con XAMPP)
+  </Tab>
+  <Tab title="Linux">
+    - Ubuntu 18.04+ / Debian 9+ / CentOS 7+
+    - Kernel 3.10 o superior
+    - Privilegios de superusuario para instalación
+  </Tab>
+  <Tab title="macOS">
+    - macOS 10.13 (High Sierra) o superior
+    - Xcode Command Line Tools (opcional)
+  </Tab>
+</Tabs>
+
+---
+
+## Permisos de Archivos
+
+El servidor web debe tener permisos de lectura/escritura en:
+
+- Carpeta principal del proyecto: `htdocs/inventario/`
+- Archivos de configuración: `config/conexion.php`
+- Sesiones PHP: directorio temporal del sistema
+
+<Accordion title="Configurar permisos en Linux">
+  ```bash
+  # Navegar a la carpeta de XAMPP
+  cd /opt/lampp/htdocs/inventario
+  
+  # Establecer permisos adecuados
+  sudo chmod -R 755 .
+  sudo chown -R daemon:daemon .
+  
+  # Permisos específicos para archivos de configuración
+  sudo chmod 644 config/conexion.php
+  ```
+</Accordion>
+
+<Accordion title="Configurar permisos en Windows">
+  1. Clic derecho en la carpeta `C:\xampp\htdocs\inventario`
+  2. Seleccionar **Propiedades** > **Seguridad**
+  3. Asegurar que el usuario actual tenga permisos de:
+     - Lectura
+     - Escritura
+     - Modificación
+</Accordion>
+
+---
+
+## Verificación de Requisitos
+
+### Lista de Verificación Rápida
+
+Antes de proceder con la instalación:
+
+- [ ] XAMPP instalado y funcionando
+- [ ] Apache y MySQL activos en el panel de control
+- [ ] PHP 7.4+ configurado
+- [ ] Extensión mysqli habilitada
+- [ ] Base de datos `bd_inventario` creada
+- [ ] Navegador web moderno instalado
+- [ ] Permisos de archivos configurados correctamente
+
+<Tip>
+  Si todos los elementos están marcados, estás listo para proceder con la [instalación](/getting-started/installation).
+</Tip>
+
+---
+
+## Próximos Pasos
+
+<CardGroup cols={2}>
+  <Card title="Instalación" icon="download" href="/installation">
+    Sigue la guía paso a paso para instalar el sistema
+  </Card>
+  <Card title="Configuración" icon="gear" href="/configuration">
+    Configura la conexión a la base de datos
+  </Card>
+  <Card title="Solución de Problemas" icon="wrench" href="/reference/troubleshooting">
+    Resuelve problemas comunes de instalación
+  </Card>
+  <Card title="Guías de Usuario" icon="rocket" href="/guides/authentication">
+    Comienza a usar el sistema
+  </Card>
+</CardGroup>

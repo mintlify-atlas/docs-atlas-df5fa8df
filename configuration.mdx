@@ -1,0 +1,477 @@
+---
+title: 'Configuración'
+description: 'Configura la conexión a la base de datos, usuarios y ajustes del sistema de inventario'
+---
+
+## Configuración de la Base de Datos
+
+La configuración de conexión a la base de datos se encuentra en el archivo `config/conexion.php`.
+
+### Parámetros de Conexión
+
+```php config/conexion.php
+<?php
+$host = "localhost";      // Servidor de base de datos
+$user = "root";            // Usuario de MySQL
+$pass = "";                // Contraseña de MySQL
+$db   = "bd_inventario";  // Nombre de la base de datos
+
+$conn = new mysqli($host, $user, $pass, $db);
+
+if ($conn->connect_error) {
+    die("Error de conexión: " . $conn->connect_error);
+}
+?>
+```
+
+### Configuración según el Entorno
+
+<CodeGroup>
+```php Desarrollo (XAMPP)
+$host = "localhost";
+$user = "root";
+$pass = "";
+$db   = "bd_inventario";
+```
+
+```php Producción
+$host = "tu-servidor.com";
+$user = "usuario_db";
+$pass = "contraseña_segura";
+$db   = "bd_inventario";
+```
+</CodeGroup>
+
+<Warning>
+**Seguridad en Producción:** Nunca uses el usuario `root` con contraseña vacía en un servidor de producción. Crea un usuario específico con permisos limitados solo para esta base de datos.
+</Warning>
+
+### Crear Usuario de Base de Datos Específico
+
+Para mayor seguridad, crea un usuario dedicado para el sistema:
+
+<Steps>
+  <Step title="Acceder a MySQL">
+    Abre phpMyAdmin o conéctate por terminal:
+    
+    ```bash
+    mysql -u root -p
+    ```
+  </Step>
+
+  <Step title="Crear el usuario">
+    Ejecuta los siguientes comandos SQL:
+    
+    ```sql
+    -- Crear usuario
+    CREATE USER 'inventario_user'@'localhost' IDENTIFIED BY 'tu_contraseña_segura';
+
+    -- Otorgar permisos solo a la base de datos bd_inventario
+    GRANT SELECT, INSERT, UPDATE, DELETE ON bd_inventario.* TO 'inventario_user'@'localhost';
+
+    -- Aplicar cambios
+    FLUSH PRIVILEGES;
+    ```
+  </Step>
+
+  <Step title="Actualizar config/conexion.php">
+    Modifica el archivo con las nuevas credenciales:
+    
+    ```php
+    $host = "localhost";
+    $user = "inventario_user";
+    $pass = "tu_contraseña_segura";
+    $db   = "bd_inventario";
+    ```
+  </Step>
+</Steps>
+
+## Gestión de Usuarios
+
+El sistema maneja dos tipos de roles: **Admin** y **Empleado**.
+
+### Estructura de la Tabla Usuarios
+
+```sql
+CREATE TABLE usuarios (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    correo VARCHAR(100) UNIQUE NOT NULL,
+    contraseña VARCHAR(255) NOT NULL,
+    rol ENUM('Admin', 'Empleado') DEFAULT 'Empleado',
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### Crear Nuevos Usuarios
+
+Puedes crear usuarios adicionales ejecutando consultas SQL en phpMyAdmin:
+
+```sql
+-- Usuario Administrador
+INSERT INTO usuarios (nombre, correo, contraseña, rol)
+VALUES ('María García', 'maria@empresa.com', 'contraseña123', 'Admin');
+
+-- Usuario Empleado
+INSERT INTO usuarios (nombre, correo, contraseña, rol)
+VALUES ('Carlos López', 'carlos@empresa.com', 'contraseña123', 'Empleado');
+```
+
+<Warning>
+**Seguridad Crítica:** El sistema actualmente almacena contraseñas en texto plano. Esto es una vulnerabilidad de seguridad importante. Se recomienda implementar hashing antes de usar en producción.
+</Warning>
+
+### Mejorar la Seguridad de Contraseñas
+
+Para implementar hashing de contraseñas, modifica el código de autenticación:
+
+<Steps>
+  <Step title="Modificar el proceso de registro">
+    Cuando crees usuarios, usa `password_hash()`:
+    
+    ```php
+    // Al crear un usuario
+    $contraseña_hash = password_hash($contraseña_plana, PASSWORD_DEFAULT);
+    
+    $sql = "INSERT INTO usuarios (nombre, correo, contraseña, rol)
+            VALUES ('$nombre', '$correo', '$contraseña_hash', '$rol')";
+    ```
+  </Step>
+
+  <Step title="Actualizar auth/login.php">
+    Modifica la línea 16 del archivo `auth/login.php`:
+    
+    ```php
+    // ANTES (línea 16):
+    if ($password == $usuario['contraseña']) {
+    
+    // DESPUÉS:
+    if (password_verify($password, $usuario['contraseña'])) {
+    ```
+  </Step>
+
+  <Step title="Actualizar contraseñas existentes">
+    Regenera las contraseñas de los usuarios existentes:
+    
+    ```php
+    <?php
+    // Script de migración (ejecutar una sola vez)
+    include("config/conexion.php");
+    
+    $usuarios = $conn->query("SELECT id, contraseña FROM usuarios");
+    
+    while ($user = $usuarios->fetch_assoc()) {
+        $hash = password_hash($user['contraseña'], PASSWORD_DEFAULT);
+        $conn->query("UPDATE usuarios SET contraseña = '$hash' WHERE id = {$user['id']}");
+    }
+    
+    echo "Contraseñas actualizadas exitosamente";
+    ?>
+    ```
+  </Step>
+</Steps>
+
+## Configuración de Sesiones
+
+El sistema usa sesiones PHP para mantener la autenticación. La configuración se encuentra en varios archivos:
+
+### Inicio de Sesión (auth/login.php)
+
+```php auth/login.php
+session_start();
+include("../config/conexion.php");
+
+if (isset($_POST['login'])) {
+    $correo = $_POST['correo'];
+    $password = $_POST['password'];
+
+    $sql = "SELECT * FROM usuarios WHERE correo = '$correo'";
+    $resultado = $conn->query($sql);
+
+    if ($resultado->num_rows == 1) {
+        $usuario = $resultado->fetch_assoc();
+
+        if ($password == $usuario['contraseña']) {
+            $_SESSION['usuario'] = $usuario['nombre'];
+            $_SESSION['rol'] = $usuario['rol'];
+            header("Location: ../index.php");
+            exit();
+        }
+    }
+}
+```
+
+### Protección de Páginas (index.php)
+
+Todas las páginas protegidas verifican la sesión:
+
+```php index.php
+<?php
+session_start();
+
+if (!isset($_SESSION['usuario'])) {
+    header("Location: auth/login.php");
+    exit();
+}
+?>
+```
+
+<Tip>
+Copia este bloque de código al inicio de cada archivo PHP que requiera autenticación para protegerlo del acceso no autorizado.
+</Tip>
+
+### Configuración Avanzada de Sesiones
+
+Para mejorar la seguridad de las sesiones, agrega lo siguiente al inicio de `config/conexion.php`:
+
+```php
+<?php
+// Configuración segura de sesiones
+ini_set('session.cookie_httponly', 1);  // Previene acceso JavaScript
+ini_set('session.use_only_cookies', 1);  // Solo usa cookies
+ini_set('session.cookie_secure', 0);     // Cambiar a 1 si usas HTTPS
+
+session_set_cookie_params([
+    'lifetime' => 3600,      // 1 hora
+    'path' => '/',
+    'domain' => 'localhost',
+    'secure' => false,       // Cambiar a true si usas HTTPS
+    'httponly' => true,
+    'samesite' => 'Strict'
+]);
+?>
+```
+
+## Configuración de la Estructura de Productos
+
+La tabla de productos contiene los siguientes campos:
+
+```sql
+CREATE TABLE productos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(150) NOT NULL,
+    codigo VARCHAR(50) UNIQUE NOT NULL,
+    precio DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+    stock INT NOT NULL DEFAULT 0,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+```
+
+### Personalizar Campos de Productos
+
+Puedes agregar campos adicionales según tus necesidades:
+
+```sql
+-- Agregar categoría
+ALTER TABLE productos ADD COLUMN categoria VARCHAR(50) AFTER nombre;
+
+-- Agregar descripción
+ALTER TABLE productos ADD COLUMN descripcion TEXT AFTER codigo;
+
+-- Agregar ubicación en almacén
+ALTER TABLE productos ADD COLUMN ubicacion VARCHAR(50) AFTER precio;
+
+-- Agregar stock mínimo
+ALTER TABLE productos ADD COLUMN stock_minimo INT DEFAULT 5 AFTER stock;
+```
+
+<Info>
+Después de modificar la estructura de la base de datos, recuerda actualizar los archivos PHP correspondientes (crear.php, editar.php, listar.php) para incluir los nuevos campos.
+</Info>
+
+## Configuración de Movimientos de Inventario
+
+El sistema registra automáticamente las entradas y salidas en la tabla `movimientos`:
+
+```sql
+CREATE TABLE movimientos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    producto_id INT NOT NULL,
+    tipo ENUM('entrada', 'salida') NOT NULL,
+    cantidad INT NOT NULL,
+    fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (producto_id) REFERENCES productos(id) ON DELETE CASCADE
+);
+```
+
+### Cómo Funcionan los Movimientos
+
+**Entrada de inventario** (movimientos/entrada.php):
+
+```php movimientos/entrada.php
+// Registrar movimiento
+$conn->query("INSERT INTO movimientos (producto_id, tipo, cantidad)
+              VALUES ($producto_id, 'entrada', $cantidad)");
+
+// Aumentar stock
+$conn->query("UPDATE productos 
+              SET stock = stock + $cantidad 
+              WHERE id = $producto_id");
+```
+
+**Salida de inventario** (movimientos/salida.php):
+
+```php
+// Registrar movimiento
+$conn->query("INSERT INTO movimientos (producto_id, tipo, cantidad)
+              VALUES ($producto_id, 'salida', $cantidad)");
+
+// Disminuir stock
+$conn->query("UPDATE productos 
+              SET stock = stock - $cantidad 
+              WHERE id = $producto_id");
+```
+
+<Note>
+El sistema usa `ON DELETE CASCADE` en la clave foránea, lo que significa que al eliminar un producto, todos sus movimientos asociados también se eliminarán automáticamente.
+</Note>
+
+## Configuración de Permisos de Archivos
+
+### Permisos en Linux/macOS
+
+Para que Apache pueda leer y ejecutar los archivos correctamente:
+
+```bash
+# Cambiar al directorio del proyecto
+cd /opt/lampp/htdocs/inventario
+
+# Establecer permisos de archivos
+sudo find . -type f -exec chmod 644 {} \;
+
+# Establecer permisos de directorios
+sudo find . -type d -exec chmod 755 {} \;
+
+# Cambiar propietario (reemplaza 'daemon' con el usuario de Apache)
+sudo chown -R daemon:daemon .
+```
+
+<Tip>
+En Ubuntu/Debian, el usuario de Apache suele ser `www-data`. Usa `chown -R www-data:www-data .` en ese caso.
+</Tip>
+
+## Prevención de Inyección SQL
+
+<Warning>
+**Vulnerabilidad Crítica:** El código actual es vulnerable a inyección SQL. Antes de usar en producción, implementa consultas preparadas.
+</Warning>
+
+### Implementar Consultas Preparadas
+
+Modifica las consultas para usar prepared statements:
+
+```php
+// VULNERABLE (NO USAR):
+$sql = "SELECT * FROM usuarios WHERE correo = '$correo'";
+$resultado = $conn->query($sql);
+
+// SEGURO (USAR):
+$stmt = $conn->prepare("SELECT * FROM usuarios WHERE correo = ?");
+$stmt->bind_param("s", $correo);
+$stmt->execute();
+$resultado = $stmt->get_result();
+```
+
+**Ejemplo completo en login.php:**
+
+```php
+$stmt = $conn->prepare("SELECT * FROM usuarios WHERE correo = ?");
+$stmt->bind_param("s", $correo);
+$stmt->execute();
+$resultado = $stmt->get_result();
+
+if ($resultado->num_rows == 1) {
+    $usuario = $resultado->fetch_assoc();
+    // Resto del código...
+}
+$stmt->close();
+```
+
+## Configuración de Zona Horaria
+
+Para que las fechas se registren correctamente en tu zona horaria:
+
+```php config/conexion.php
+<?php
+// Agregar después de la conexión exitosa
+date_default_timezone_set('America/Bogota');  // Ajusta según tu ubicación
+$conn->query("SET time_zone = '-05:00'");      // GMT-5 para Colombia
+?>
+```
+
+<Info>
+Consulta la lista completa de zonas horarias en [php.net/manual/es/timezones.php](https://www.php.net/manual/es/timezones.php)
+</Info>
+
+## Respaldo y Restauración
+
+### Crear Respaldo de la Base de Datos
+
+Desde phpMyAdmin:
+1. Selecciona la base de datos `bd_inventario`
+2. Haz clic en la pestaña "Exportar"
+3. Selecciona "Método rápido" o "Personalizado"
+4. Haz clic en "Continuar" para descargar el archivo SQL
+
+**Desde terminal:**
+
+```bash
+# Windows (XAMPP)
+cd C:\xampp\mysql\bin
+mysqldump -u root bd_inventario > backup.sql
+
+# Linux
+mysqldump -u root -p bd_inventario > backup.sql
+```
+
+### Restaurar desde Respaldo
+
+```bash
+# Windows (XAMPP)
+cd C:\xampp\mysql\bin
+mysql -u root bd_inventario < backup.sql
+
+# Linux
+mysql -u root -p bd_inventario < backup.sql
+```
+
+<Tip>
+**Automatizar respaldos:** Configura un cron job (Linux) o Tarea Programada (Windows) para ejecutar mysqldump automáticamente cada día.
+</Tip>
+
+## Variables de Configuración PHP
+
+Para ajustar límites de PHP, edita el archivo `php.ini` en XAMPP:
+
+```ini
+; Límites de memoria y tiempo
+memory_limit = 128M
+max_execution_time = 300
+max_input_time = 300
+
+; Subida de archivos (si planeas agregar imágenes de productos)
+upload_max_filesize = 10M
+post_max_size = 10M
+
+; Mostrar errores (solo en desarrollo)
+display_errors = On
+error_reporting = E_ALL
+
+; Ocultar errores (en producción)
+; display_errors = Off
+; error_reporting = E_ALL & ~E_NOTICE
+```
+
+<Warning>
+**Importante:** Después de editar `php.ini`, debes reiniciar Apache desde el Panel de Control de XAMPP para que los cambios surtan efecto.
+</Warning>
+
+## Próximos Pasos
+
+Con el sistema configurado, estás listo para:
+
+- Comenzar a registrar productos en tu inventario
+- Configurar usuarios adicionales con roles apropiados
+- Personalizar campos según las necesidades de tu negocio
+- Implementar las mejoras de seguridad recomendadas

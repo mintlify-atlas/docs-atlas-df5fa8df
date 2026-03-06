@@ -1,0 +1,779 @@
+---
+title: 'Contributing Guide'
+description: 'Guidelines and best practices for contributing to the PHP inventory management system'
+---
+
+## Getting Started
+
+Thank you for considering contributing to the PHP Inventory Management System! This guide will help you understand the codebase structure and development workflow.
+
+## Prerequisites
+
+Before you begin, ensure you have the following installed:
+
+- **PHP 7.4+** (PHP 8.0+ recommended)
+- **MySQL 5.7+** or **MariaDB 10.3+**
+- **Apache** or **Nginx** web server
+- **Git** for version control
+
+## Development Setup
+
+### 1. Clone the Repository
+
+```bash
+git clone <repository-url>
+cd <repository-name>
+```
+
+### 2. Configure Database
+
+Create the database and tables:
+
+```bash
+mysql -u root -p
+```
+
+```sql
+CREATE DATABASE bd_inventario CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE bd_inventario;
+
+-- Create tables (see Database Schema docs for full SQL)
+CREATE TABLE usuarios (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    correo VARCHAR(100) UNIQUE NOT NULL,
+    contraseña VARCHAR(255) NOT NULL,
+    rol ENUM('admin', 'usuario') DEFAULT 'usuario',
+    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE productos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(200) NOT NULL,
+    codigo VARCHAR(50) UNIQUE NOT NULL,
+    precio DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    stock INT NOT NULL DEFAULT 0,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE movimientos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    producto_id INT NOT NULL,
+    tipo ENUM('entrada', 'salida') NOT NULL,
+    cantidad INT NOT NULL,
+    fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (producto_id) REFERENCES productos(id) ON DELETE CASCADE
+);
+
+-- Create test user
+INSERT INTO usuarios (nombre, correo, contraseña, rol) 
+VALUES ('Admin', 'admin@example.com', 'admin123', 'admin');
+```
+
+### 3. Configure Connection
+
+Update the database credentials in `config/conexion.php`:
+
+```php
+$host = "localhost";
+$user = "root";           // Your MySQL username
+$pass = "your_password";  // Your MySQL password
+$db   = "bd_inventario";
+```
+
+### 4. Start Development Server
+
+**Using PHP Built-in Server:**
+```bash
+php -S localhost:8000
+```
+
+**Using Apache/Nginx:**
+Place the project in your web server's document root (e.g., `/var/www/html/` or `htdocs/`)
+
+### 5. Test the Application
+
+Navigate to:
+```
+http://localhost:8000/auth/login.php
+```
+
+Login with:
+- Email: `admin@example.com`
+- Password: `admin123`
+
+## Code Structure
+
+### Directory Organization
+
+```
+source/
+├── config/          # Database configuration
+├── auth/            # Authentication module
+├── productos/       # Product management
+├── movimientos/     # Inventory movements
+└── index.php        # Main dashboard
+```
+
+See the [File Structure](/development/file-structure) documentation for detailed information.
+
+## Coding Standards
+
+### PHP Style Guide
+
+<Accordion title="General PHP Guidelines">
+
+**File Headers:**
+```php
+<?php
+session_start();
+include("../config/conexion.php");
+
+// Session validation for protected pages
+if (!isset($_SESSION['usuario'])) {
+    header("Location: ../auth/login.php");
+    exit();
+}
+```
+
+**Naming Conventions:**
+- Variables: `$snake_case`
+- Functions: `camelCase()` or `snake_case()` (be consistent)
+- Constants: `UPPER_CASE`
+- Classes: `PascalCase` (if implementing OOP)
+
+**Indentation:**
+- Use 4 spaces (not tabs)
+- Opening braces on same line for control structures
+
+```php
+if (condition) {
+    // code
+} else {
+    // code
+}
+```
+
+</Accordion>
+
+<Accordion title="Database Query Patterns">
+
+**Current Pattern (to be improved):**
+```php
+$sql = "SELECT * FROM productos WHERE id=$id";
+$resultado = $conn->query($sql);
+```
+
+**Recommended Pattern (use for new code):**
+```php
+// Prepared statements for security
+$stmt = $conn->prepare("SELECT * FROM productos WHERE id = ?");
+$stmt->bind_param("i", $id);
+$stmt->execute();
+$resultado = $stmt->get_result();
+```
+
+**Fetching Results:**
+```php
+// Single row
+$row = $resultado->fetch_assoc();
+
+// Multiple rows
+while ($row = $resultado->fetch_assoc()) {
+    // Process each row
+}
+```
+
+</Accordion>
+
+<Accordion title="HTML/PHP Mixed Code">
+
+**Good Practice:**
+```php
+<?php
+// Business logic at top
+$productos = $conn->query("SELECT * FROM productos");
+?>
+
+<!-- HTML presentation below -->
+<table>
+<?php while ($p = $productos->fetch_assoc()) { ?>
+    <tr>
+        <td><?= htmlspecialchars($p['nombre']) ?></td>
+    </tr>
+<?php } ?>
+</table>
+```
+
+**Use Short Echo Tags:**
+```php
+<?= $variable ?>  // Good
+<?php echo $variable; ?>  // Also acceptable
+```
+
+**Always Escape Output:**
+```php
+<?= htmlspecialchars($user_input, ENT_QUOTES, 'UTF-8') ?>
+```
+
+</Accordion>
+
+### SQL Guidelines
+
+<Accordion title="Query Writing Standards">
+
+**Table Operations:**
+```sql
+-- Use meaningful column names
+-- Include timestamps for auditing
+-- Use appropriate data types
+
+CREATE TABLE example (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(200) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+```
+
+**Foreign Keys:**
+```sql
+-- Always define relationships
+-- Use CASCADE carefully
+
+FOREIGN KEY (producto_id) 
+    REFERENCES productos(id) 
+    ON DELETE CASCADE
+```
+
+**Indexing:**
+```sql
+-- Add indexes for frequently queried columns
+CREATE INDEX idx_correo ON usuarios(correo);
+CREATE INDEX idx_codigo ON productos(codigo);
+CREATE INDEX idx_producto_fecha ON movimientos(producto_id, fecha);
+```
+
+</Accordion>
+
+## Development Workflow
+
+### Adding New Features
+
+<Steps>
+  <Step title="Plan the Feature">
+    - Identify which module it belongs to (auth, productos, movimientos)
+    - Determine required database changes
+    - Design the user interface
+  </Step>
+  
+  <Step title="Create Database Changes">
+    ```sql
+    -- Example: Add description field to products
+    ALTER TABLE productos 
+    ADD COLUMN descripcion TEXT AFTER nombre;
+    ```
+  </Step>
+  
+  <Step title="Implement Backend Logic">
+    Create new PHP file or modify existing one:
+    
+    ```php
+    <?php
+    session_start();
+    include("../config/conexion.php");
+    
+    // Validate session
+    if (!isset($_SESSION['usuario'])) {
+        header("Location: ../auth/login.php");
+        exit();
+    }
+    
+    // Your feature logic here
+    if (isset($_POST['submit'])) {
+        // Process form
+        $data = $_POST['data'];
+        
+        // Use prepared statements
+        $stmt = $conn->prepare("INSERT INTO table (column) VALUES (?)");
+        $stmt->bind_param("s", $data);
+        $stmt->execute();
+        
+        header("Location: success_page.php");
+        exit();
+    }
+    ?>
+    
+    <!-- HTML form -->
+    ```
+  </Step>
+  
+  <Step title="Test Thoroughly">
+    - Test with valid data
+    - Test with invalid data
+    - Test edge cases (empty fields, special characters)
+    - Test different user roles if applicable
+  </Step>
+  
+  <Step title="Update Documentation">
+    Add your feature to the relevant documentation pages
+  </Step>
+</Steps>
+
+### Example: Adding a Categories Feature
+
+<Accordion title="Complete Implementation Example">
+
+**Step 1: Create Database Table**
+```sql
+CREATE TABLE categorias (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL UNIQUE,
+    descripcion TEXT,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE productos 
+ADD COLUMN categoria_id INT,
+ADD FOREIGN KEY (categoria_id) REFERENCES categorias(id);
+```
+
+**Step 2: Create categorias/listar.php**
+```php
+<?php
+session_start();
+include("../config/conexion.php");
+
+$categorias = $conn->query("SELECT * FROM categorias ORDER BY nombre");
+?>
+
+<h2>Categorías</h2>
+<a href="crear.php">Nueva Categoría</a>
+
+<table border="1">
+<tr>
+    <th>ID</th>
+    <th>Nombre</th>
+    <th>Descripción</th>
+    <th>Acciones</th>
+</tr>
+<?php while ($cat = $categorias->fetch_assoc()) { ?>
+<tr>
+    <td><?= $cat['id'] ?></td>
+    <td><?= htmlspecialchars($cat['nombre']) ?></td>
+    <td><?= htmlspecialchars($cat['descripcion']) ?></td>
+    <td>
+        <a href="editar.php?id=<?= $cat['id'] ?>">Editar</a>
+        <a href="eliminar.php?id=<?= $cat['id'] ?>" 
+           onclick="return confirm('¿Eliminar?')">Eliminar</a>
+    </td>
+</tr>
+<?php } ?>
+</table>
+```
+
+**Step 3: Create categorias/crear.php**
+```php
+<?php
+session_start();
+include("../config/conexion.php");
+
+if (isset($_POST['guardar'])) {
+    $nombre = $_POST['nombre'];
+    $descripcion = $_POST['descripcion'];
+    
+    $stmt = $conn->prepare("INSERT INTO categorias (nombre, descripcion) 
+                           VALUES (?, ?)");
+    $stmt->bind_param("ss", $nombre, $descripcion);
+    
+    if ($stmt->execute()) {
+        header("Location: listar.php");
+        exit();
+    } else {
+        $error = "Error al guardar categoría";
+    }
+}
+?>
+
+<h2>Nueva Categoría</h2>
+<?php if (isset($error)) echo "<p>$error</p>"; ?>
+
+<form method="POST">
+    Nombre:<br>
+    <input type="text" name="nombre" required><br><br>
+    
+    Descripción:<br>
+    <textarea name="descripcion"></textarea><br><br>
+    
+    <button name="guardar">Guardar</button>
+</form>
+```
+
+**Step 4: Update productos/crear.php**
+```php
+// Add category dropdown to product form
+$categorias = $conn->query("SELECT * FROM categorias ORDER BY nombre");
+
+// In form:
+<select name="categoria_id" required>
+    <option value="">Seleccione categoría</option>
+    <?php while ($cat = $categorias->fetch_assoc()) { ?>
+        <option value="<?= $cat['id'] ?>">
+            <?= htmlspecialchars($cat['nombre']) ?>
+        </option>
+    <?php } ?>
+</select>
+
+// Update INSERT query
+$stmt = $conn->prepare("INSERT INTO productos 
+                        (nombre, codigo, precio, categoria_id) 
+                        VALUES (?, ?, ?, ?)");
+$stmt->bind_param("ssdi", $nombre, $codigo, $precio, $categoria_id);
+```
+
+</Accordion>
+
+## Security Guidelines
+
+<Warning>
+The current codebase has security vulnerabilities. All new code MUST follow these security practices:
+</Warning>
+
+### SQL Injection Prevention
+
+<Accordion title="Use Prepared Statements">
+
+**Never Do This:**
+```php
+// VULNERABLE - Don't use string concatenation
+$sql = "SELECT * FROM usuarios WHERE correo = '$correo'";
+$conn->query($sql);
+```
+
+**Always Do This:**
+```php
+// SECURE - Use prepared statements
+$stmt = $conn->prepare("SELECT * FROM usuarios WHERE correo = ?");
+$stmt->bind_param("s", $correo);
+$stmt->execute();
+$resultado = $stmt->get_result();
+```
+
+**Parameter Types:**
+- `i` - integer
+- `d` - double/float
+- `s` - string
+- `b` - blob
+
+```php
+$stmt->bind_param("sdi", $string, $decimal, $integer);
+```
+
+</Accordion>
+
+### XSS Prevention
+
+<Accordion title="Escape All Output">
+
+**Always escape user-generated content:**
+```php
+// In HTML context
+<?= htmlspecialchars($user_input, ENT_QUOTES, 'UTF-8') ?>
+
+// In JavaScript context
+<script>
+var data = <?= json_encode($user_input, JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+</script>
+
+// In URL context
+<a href="page.php?id=<?= urlencode($id) ?>">
+```
+
+</Accordion>
+
+### Password Security
+
+<Accordion title="Use Password Hashing">
+
+**Registration/User Creation:**
+```php
+$password = $_POST['password'];
+$hashed = password_hash($password, PASSWORD_DEFAULT);
+
+$stmt = $conn->prepare("INSERT INTO usuarios (nombre, correo, contraseña, rol) 
+                        VALUES (?, ?, ?, ?)");
+$stmt->bind_param("ssss", $nombre, $correo, $hashed, $rol);
+$stmt->execute();
+```
+
+**Login/Verification:**
+```php
+$stmt = $conn->prepare("SELECT * FROM usuarios WHERE correo = ?");
+$stmt->bind_param("s", $correo);
+$stmt->execute();
+$resultado = $stmt->get_result();
+$usuario = $resultado->fetch_assoc();
+
+if ($usuario && password_verify($password, $usuario['contraseña'])) {
+    // Login successful
+    $_SESSION['usuario'] = $usuario['nombre'];
+    $_SESSION['rol'] = $usuario['rol'];
+} else {
+    $error = "Credenciales inválidas";
+}
+```
+
+</Accordion>
+
+### Session Security
+
+<Accordion title="Secure Session Configuration">
+
+Add this to the beginning of `config/conexion.php` or create a separate `config/session.php`:
+
+```php
+// Secure session configuration
+ini_set('session.cookie_httponly', 1);
+ini_set('session.cookie_secure', 1);  // Only if using HTTPS
+ini_set('session.cookie_samesite', 'Strict');
+ini_set('session.use_strict_mode', 1);
+
+session_start();
+
+// Regenerate session ID after login
+// Add this to auth/login.php after successful login
+session_regenerate_id(true);
+```
+
+</Accordion>
+
+## Testing
+
+### Manual Testing Checklist
+
+<AccordionGroup>
+  <Accordion title="Authentication Testing">
+    - [ ] Valid credentials login successfully
+    - [ ] Invalid credentials show error message
+    - [ ] Empty fields are rejected
+    - [ ] Session persists across pages
+    - [ ] Logout destroys session
+    - [ ] Unauthenticated users are redirected to login
+  </Accordion>
+  
+  <Accordion title="Product Management Testing">
+    - [ ] Can create product with valid data
+    - [ ] Duplicate codigo is rejected
+    - [ ] Can edit existing product
+    - [ ] Can delete product
+    - [ ] Deleting product removes related movements
+    - [ ] Product list displays correctly
+    - [ ] Stock displays current value
+  </Accordion>
+  
+  <Accordion title="Movement Testing">
+    - [ ] Entrada increases stock correctly
+    - [ ] Salida decreases stock correctly
+    - [ ] Salida validates sufficient stock
+    - [ ] Cannot remove more stock than available
+    - [ ] Movement records are created
+    - [ ] Stock updates are atomic
+  </Accordion>
+  
+  <Accordion title="Security Testing">
+    - [ ] SQL injection attempts are blocked
+    - [ ] XSS attempts are escaped
+    - [ ] Session hijacking is prevented
+    - [ ] CSRF tokens are validated (if implemented)
+    - [ ] File upload validation (if implemented)
+  </Accordion>
+</AccordionGroup>
+
+## Common Issues and Solutions
+
+<Accordion title="Database Connection Errors">
+
+**Error:** "Error de conexión: Access denied"
+
+**Solution:**
+```bash
+# Check MySQL credentials
+mysql -u root -p
+
+# Grant privileges if needed
+GRANT ALL PRIVILEGES ON bd_inventario.* TO 'root'@'localhost';
+FLUSH PRIVILEGES;
+```
+
+**Error:** "Unknown database 'bd_inventario'"
+
+**Solution:**
+```sql
+CREATE DATABASE bd_inventario;
+USE bd_inventario;
+-- Run table creation scripts
+```
+
+</Accordion>
+
+<Accordion title="Session Issues">
+
+**Issue:** Sessions not persisting
+
+**Solutions:**
+1. Check `session_start()` is called before any output
+2. Verify PHP session directory has write permissions
+3. Check browser cookies are enabled
+
+```php
+// Debug session
+var_dump($_SESSION);
+var_dump(session_id());
+```
+
+</Accordion>
+
+<Accordion title="Stock Inconsistencies">
+
+**Issue:** Stock count doesn't match movements
+
+**Solution:** Recalculate stock from movements:
+
+```sql
+-- Audit query
+SELECT 
+    p.id,
+    p.nombre,
+    p.stock as current_stock,
+    COALESCE(SUM(CASE WHEN m.tipo = 'entrada' THEN m.cantidad ELSE 0 END), 0) as total_entries,
+    COALESCE(SUM(CASE WHEN m.tipo = 'salida' THEN m.cantidad ELSE 0 END), 0) as total_exits,
+    COALESCE(SUM(CASE WHEN m.tipo = 'entrada' THEN m.cantidad ELSE -m.cantidad END), 0) as calculated_stock
+FROM productos p
+LEFT JOIN movimientos m ON p.id = m.producto_id
+GROUP BY p.id;
+
+-- Repair query (use cautiously)
+UPDATE productos p
+SET p.stock = (
+    SELECT COALESCE(SUM(CASE WHEN m.tipo = 'entrada' THEN m.cantidad ELSE -m.cantidad END), 0)
+    FROM movimientos m
+    WHERE m.producto_id = p.id
+);
+```
+
+</Accordion>
+
+## Pull Request Guidelines
+
+### Before Submitting
+
+<Steps>
+  <Step title="Code Quality">
+    - Follow coding standards
+    - Use prepared statements for all queries
+    - Escape all user output
+    - Add comments for complex logic
+  </Step>
+  
+  <Step title="Testing">
+    - Test all functionality manually
+    - Test edge cases and error conditions
+    - Verify no existing features are broken
+  </Step>
+  
+  <Step title="Documentation">
+    - Update relevant documentation
+    - Add code comments where needed
+    - Include usage examples if applicable
+  </Step>
+</Steps>
+
+### PR Description Template
+
+```markdown
+## Description
+Brief description of changes
+
+## Type of Change
+- [ ] Bug fix
+- [ ] New feature
+- [ ] Security improvement
+- [ ] Documentation update
+- [ ] Code refactoring
+
+## Changes Made
+- List specific changes
+- Include file names
+- Mention any database modifications
+
+## Testing
+- Describe how you tested the changes
+- List test cases covered
+
+## Screenshots (if applicable)
+
+## Checklist
+- [ ] Code follows project style guidelines
+- [ ] Used prepared statements for SQL queries
+- [ ] Escaped all user output
+- [ ] Tested thoroughly
+- [ ] Updated documentation
+- [ ] No security vulnerabilities introduced
+```
+
+## Priority Improvements
+
+These are high-priority security and code quality improvements needed:
+
+<CardGroup cols={2}>
+  <Card title="Security Hardening" icon="shield-halved">
+    - Implement prepared statements everywhere
+    - Add password hashing
+    - Implement CSRF protection
+    - Add input validation
+  </Card>
+  
+  <Card title="Code Organization" icon="folder-tree">
+    - Implement MVC pattern
+    - Create reusable functions
+    - Separate business logic from presentation
+    - Add configuration management
+  </Card>
+  
+  <Card title="Features" icon="sparkles">
+    - User registration
+    - Role-based permissions
+    - Product categories
+    - Movement history/reports
+    - Export functionality
+  </Card>
+  
+  <Card title="User Experience" icon="wand-magic-sparkles">
+    - Add CSS framework (Bootstrap/Tailwind)
+    - Implement AJAX for better UX
+    - Add form validation
+    - Improve error messages
+  </Card>
+</CardGroup>
+
+## Getting Help
+
+If you need assistance:
+
+1. Check the [File Structure](/development/file-structure) documentation
+2. Review the [Database Schema](/development/database-schema) reference
+3. Look at existing code for patterns
+4. Open an issue for discussion
+
+## Code Review Process
+
+All contributions go through code review:
+
+1. **Automated Checks**: Code style, basic security
+2. **Manual Review**: Logic, security, best practices
+3. **Testing**: Functionality verification
+4. **Approval**: Merge when all checks pass
+
+<Info>
+Thank you for contributing! Your efforts help make this project better for everyone.
+</Info>

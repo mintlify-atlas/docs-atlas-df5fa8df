@@ -1,0 +1,341 @@
+---
+title: 'Database Schema'
+description: 'Complete database schema documentation including tables, columns, relationships, and SQL definitions'
+---
+
+## Overview
+
+The inventory management system uses a MySQL database named `bd_inventario` with three main tables that handle user authentication, product management, and inventory movements.
+
+## Database Connection
+
+The system connects to MySQL using the MySQLi extension:
+
+```php
+// config/conexion.php
+$host = "localhost";
+$user = "root";
+$pass = "";
+$db   = "bd_inventario";
+
+$conn = new mysqli($host, $user, $pass, $db);
+```
+
+## Tables
+
+### usuarios Table
+
+Stores user authentication and role information.
+
+<Accordion title="Table Structure">
+
+```sql
+CREATE TABLE usuarios (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    correo VARCHAR(100) UNIQUE NOT NULL,
+    contraseña VARCHAR(255) NOT NULL,
+    rol ENUM('admin', 'usuario') DEFAULT 'usuario',
+    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+**Columns:**
+- `id` - Primary key, auto-incremented user identifier
+- `nombre` - User's full name
+- `correo` - Email address (unique, used for login)
+- `contraseña` - Password (currently stored in plain text)
+- `rol` - User role (admin or usuario)
+- `fecha_registro` - Timestamp of user registration
+
+</Accordion>
+
+<Accordion title="Usage in Code">
+
+**Authentication Query** (auth/login.php:9):
+```php
+$sql = "SELECT * FROM usuarios WHERE correo = '$correo'";
+$resultado = $conn->query($sql);
+
+if ($resultado->num_rows == 1) {
+    $usuario = $resultado->fetch_assoc();
+    if ($password == $usuario['contraseña']) {
+        $_SESSION['usuario'] = $usuario['nombre'];
+        $_SESSION['rol'] = $usuario['rol'];
+    }
+}
+```
+
+**Session Variables Stored:**
+- `$_SESSION['usuario']` - User's name
+- `$_SESSION['rol']` - User's role
+
+</Accordion>
+
+<Warning>
+The current implementation stores passwords in plain text and uses direct password comparison. This should be upgraded to use `password_hash()` and `password_verify()` for production use.
+</Warning>
+
+### productos Table
+
+Manages the product catalog with pricing and stock information.
+
+<Accordion title="Table Structure">
+
+```sql
+CREATE TABLE productos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(200) NOT NULL,
+    codigo VARCHAR(50) UNIQUE NOT NULL,
+    precio DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    stock INT NOT NULL DEFAULT 0,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+**Columns:**
+- `id` - Primary key, auto-incremented product identifier
+- `nombre` - Product name
+- `codigo` - Unique product code/SKU
+- `precio` - Product price (decimal with 2 decimal places)
+- `stock` - Current stock quantity (updated by movimientos)
+- `fecha_creacion` - Timestamp of product creation
+
+</Accordion>
+
+<Accordion title="CRUD Operations">
+
+**Create** (productos/crear.php:10):
+```php
+$sql = "INSERT INTO productos (nombre, codigo, precio)
+        VALUES ('$nombre', '$codigo', '$precio')";
+```
+
+**Read** (productos/listar.php:9):
+```php
+$resultado = $conn->query("SELECT * FROM productos");
+while ($p = $resultado->fetch_assoc()) {
+    // Display: id, nombre, codigo, precio, stock
+}
+```
+
+**Update** (productos/editar.php:12):
+```php
+$conn->query("UPDATE productos 
+              SET nombre='$nombre', codigo='$codigo', precio='$precio'
+              WHERE id=$id");
+```
+
+**Delete** (productos/eliminar.php:7):
+```php
+$conn->query("DELETE FROM productos WHERE id=$id");
+```
+
+**Stock Updates** (automated by movimientos):
+```php
+// Entrada
+UPDATE productos SET stock = stock + $cantidad WHERE id = $producto_id
+
+// Salida
+UPDATE productos SET stock = stock - $cantidad WHERE id = $producto_id
+```
+
+</Accordion>
+
+### movimientos Table
+
+Tracks all inventory movements (entries and exits) with automatic stock updates.
+
+<Accordion title="Table Structure">
+
+```sql
+CREATE TABLE movimientos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    producto_id INT NOT NULL,
+    tipo ENUM('entrada', 'salida') NOT NULL,
+    cantidad INT NOT NULL,
+    fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (producto_id) REFERENCES productos(id) ON DELETE CASCADE
+);
+```
+
+**Columns:**
+- `id` - Primary key, auto-incremented movement identifier
+- `producto_id` - Foreign key referencing productos.id
+- `tipo` - Movement type (entrada = in, salida = out)
+- `cantidad` - Quantity moved
+- `fecha` - Timestamp of the movement
+
+</Accordion>
+
+<Accordion title="Movement Operations">
+
+**Entrada (Entry)** (movimientos/entrada.php:12):
+```php
+// 1. Register movement
+$conn->query("INSERT INTO movimientos (producto_id, tipo, cantidad)
+              VALUES ($producto_id, 'entrada', $cantidad)");
+
+// 2. Increase stock
+$conn->query("UPDATE productos 
+              SET stock = stock + $cantidad 
+              WHERE id = $producto_id");
+```
+
+**Salida (Exit)** (movimientos/salida.php:16):
+```php
+// 1. Validate stock
+$producto = $conn->query("SELECT stock FROM productos WHERE id=$producto_id")
+            ->fetch_assoc();
+
+if ($producto['stock'] >= $cantidad) {
+    // 2. Register movement
+    $conn->query("INSERT INTO movimientos (producto_id, tipo, cantidad)
+                  VALUES ($producto_id, 'salida', $cantidad)");
+    
+    // 3. Decrease stock
+    $conn->query("UPDATE productos 
+                  SET stock = stock - $cantidad 
+                  WHERE id = $producto_id");
+}
+```
+
+</Accordion>
+
+## Entity Relationships
+
+```
+┌──────────────┐
+│   usuarios   │
+│──────────────│
+│ id (PK)      │
+│ nombre       │
+│ correo       │
+│ contraseña   │
+│ rol          │
+└──────────────┘
+       │
+       │ (manages)
+       │
+       ▼
+┌──────────────┐         ┌──────────────┐
+│  productos   │◄────────│ movimientos  │
+│──────────────│  1:N    │──────────────│
+│ id (PK)      │         │ id (PK)      │
+│ nombre       │         │ producto_id  │
+│ codigo       │         │ tipo         │
+│ precio       │         │ cantidad     │
+│ stock        │         │ fecha        │
+└──────────────┘         └──────────────┘
+```
+
+**Relationships:**
+- `usuarios` manages all operations (session-based, no direct FK)
+- `movimientos.producto_id` → `productos.id` (FOREIGN KEY, CASCADE DELETE)
+- Each product can have multiple movements (1:N)
+- Stock is automatically updated by movement triggers
+
+## Database Initialization
+
+To set up the database, run these SQL commands:
+
+```sql
+CREATE DATABASE bd_inventario CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE bd_inventario;
+
+-- Create usuarios table
+CREATE TABLE usuarios (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    correo VARCHAR(100) UNIQUE NOT NULL,
+    contraseña VARCHAR(255) NOT NULL,
+    rol ENUM('admin', 'usuario') DEFAULT 'usuario',
+    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create productos table
+CREATE TABLE productos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(200) NOT NULL,
+    codigo VARCHAR(50) UNIQUE NOT NULL,
+    precio DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    stock INT NOT NULL DEFAULT 0,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create movimientos table
+CREATE TABLE movimientos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    producto_id INT NOT NULL,
+    tipo ENUM('entrada', 'salida') NOT NULL,
+    cantidad INT NOT NULL,
+    fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (producto_id) REFERENCES productos(id) ON DELETE CASCADE
+);
+
+-- Insert test user
+INSERT INTO usuarios (nombre, correo, contraseña, rol) 
+VALUES ('Admin', 'admin@example.com', 'admin123', 'admin');
+```
+
+## Security Considerations
+
+<Warning>
+The current implementation has several security vulnerabilities that should be addressed before production deployment:
+</Warning>
+
+1. **SQL Injection**: All queries use string concatenation without prepared statements
+2. **Password Security**: Passwords stored in plain text
+3. **XSS Vulnerability**: No output escaping on user input
+4. **CSRF Protection**: No CSRF tokens on forms
+
+### Recommended Improvements
+
+<Accordion title="Prepared Statements Example">
+
+```php
+// Current (vulnerable)
+$sql = "SELECT * FROM usuarios WHERE correo = '$correo'";
+
+// Recommended (secure)
+$stmt = $conn->prepare("SELECT * FROM usuarios WHERE correo = ?");
+$stmt->bind_param("s", $correo);
+$stmt->execute();
+$resultado = $stmt->get_result();
+```
+
+</Accordion>
+
+<Accordion title="Password Hashing Example">
+
+```php
+// Registration
+$hashed_password = password_hash($password, PASSWORD_DEFAULT);
+$stmt = $conn->prepare("INSERT INTO usuarios (nombre, correo, contraseña, rol) 
+                        VALUES (?, ?, ?, ?)");
+$stmt->bind_param("ssss", $nombre, $correo, $hashed_password, $rol);
+
+// Login
+$stmt = $conn->prepare("SELECT * FROM usuarios WHERE correo = ?");
+$stmt->bind_param("s", $correo);
+$stmt->execute();
+$resultado = $stmt->get_result();
+$usuario = $resultado->fetch_assoc();
+
+if (password_verify($password, $usuario['contraseña'])) {
+    // Login successful
+}
+```
+
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="File Structure" icon="folder-tree" href="/development/file-structure">
+    Learn about the project's file organization
+  </Card>
+  <Card title="Contributing" icon="code-pull-request" href="/development/contributing">
+    Guidelines for contributing to the project
+  </Card>
+</CardGroup>

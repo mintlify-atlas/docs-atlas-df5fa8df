@@ -1,0 +1,622 @@
+---
+title: 'Solución de Problemas'
+description: 'Guía completa para resolver problemas comunes del sistema de inventarios'
+---
+
+## Problemas Comunes y Soluciones
+
+Esta guía te ayudará a resolver los problemas más frecuentes al instalar y usar el sistema de gestión de inventarios.
+
+---
+
+## Problemas de Conexión a la Base de Datos
+
+<Accordion title="Error: Connection refused (2002)">
+  ### Descripción del Error
+  
+  ```
+  Error de conexión: Connection refused (2002)
+  ```
+  
+  ### Causa
+  El servicio MySQL no está activo en XAMPP.
+  
+  ### Solución
+  
+  1. Abre el **Panel de Control de XAMPP**
+  2. Verifica el estado del módulo **MySQL**
+  3. Haz clic en **Start** junto a MySQL
+  4. Espera a que el estado cambie a verde con el texto "Running"
+  
+  <Tip>
+    Si MySQL no inicia, verifica que el puerto 3306 no esté siendo usado por otro servicio.
+  </Tip>
+  
+  ### Verificar Puerto 3306
+  
+  **En Windows:**
+  ```bash
+  netstat -ano | findstr :3306
+  ```
+  
+  **En Linux:**
+  ```bash
+  sudo netstat -tulpn | grep :3306
+  ```
+  
+  Si el puerto está en uso, puedes cambiar el puerto de MySQL en XAMPP:
+  1. Clic en **Config** (MySQL) > **my.ini**
+  2. Buscar `port=3306` y cambiar a `port=3307`
+  3. Actualizar `config/conexion.php`:
+  
+  ```php
+  $conn = new mysqli("localhost:3307", $user, $pass, $db);
+  ```
+</Accordion>
+
+<Accordion title="Error: Access denied for user 'root'@'localhost'">
+  ### Descripción del Error
+  
+  ```
+  Error de conexión: Access denied for user 'root'@'localhost' (using password: YES)
+  ```
+  
+  ### Causa
+  Las credenciales en `config/conexion.php` no coinciden con las configuradas en MySQL.
+  
+  ### Solución
+  
+  1. Verifica las credenciales actuales de MySQL en phpMyAdmin
+  2. Edita `/workspace/source/config/conexion.php`:
+  
+  ```php
+  <?php
+  $host = "localhost";
+  $user = "root";        // Verificar usuario correcto
+  $pass = "";            // Agregar contraseña si existe
+  $db   = "bd_inventario";
+  
+  $conn = new mysqli($host, $user, $pass, $db);
+  
+  if ($conn->connect_error) {
+      die("Error de conexión: " . $conn->connect_error);
+  }
+  ?>
+  ```
+  
+  ### Restablecer Contraseña de MySQL
+  
+  Si olvidaste la contraseña de MySQL:
+  
+  1. Detén MySQL desde el panel de XAMPP
+  2. Haz clic en **Config** > **my.ini**
+  3. Agrega bajo `[mysqld]`:
+     ```ini
+     skip-grant-tables
+     ```
+  4. Inicia MySQL nuevamente
+  5. Abre phpMyAdmin y ejecuta:
+     ```sql
+     UPDATE mysql.user SET Password=PASSWORD('') WHERE User='root';
+     FLUSH PRIVILEGES;
+     ```
+  6. Elimina `skip-grant-tables` de my.ini
+  7. Reinicia MySQL
+  
+  <Warning>
+    Este procedimiento debe realizarse SOLO en entorno de desarrollo local.
+  </Warning>
+</Accordion>
+
+<Accordion title="Error: Unknown database 'bd_inventario'">
+  ### Descripción del Error
+  
+  ```
+  Error de conexión: Unknown database 'bd_inventario'
+  ```
+  
+  ### Causa
+  La base de datos no ha sido creada o importada correctamente.
+  
+  ### Solución
+  
+  1. Abre **phpMyAdmin** en `http://localhost/phpmyadmin`
+  2. Haz clic en **Nueva** en el panel izquierdo
+  3. Nombre de la base de datos: `bd_inventario`
+  4. Cotejamiento: `utf8mb4_general_ci`
+  5. Haz clic en **Crear**
+  
+  ### Crear Tablas Manualmente
+  
+  Si no tienes el archivo SQL de importación, ejecuta estos scripts en la pestaña SQL de phpMyAdmin:
+  
+  ```sql
+  -- Tabla de usuarios
+  CREATE TABLE usuarios (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    correo VARCHAR(100) UNIQUE NOT NULL,
+    contraseña VARCHAR(255) NOT NULL,
+    rol ENUM('Admin', 'Empleado') DEFAULT 'Empleado',
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  
+  -- Tabla de productos
+  CREATE TABLE productos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(150) NOT NULL,
+    codigo VARCHAR(50) UNIQUE NOT NULL,
+    precio DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    stock INT NOT NULL DEFAULT 0,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  
+  -- Tabla de movimientos
+  CREATE TABLE movimientos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    producto_id INT NOT NULL,
+    tipo ENUM('entrada', 'salida') NOT NULL,
+    cantidad INT NOT NULL,
+    fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (producto_id) REFERENCES productos(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  
+  -- Insertar usuario administrador de prueba
+  INSERT INTO usuarios (nombre, correo, contraseña, rol) 
+  VALUES ('Administrador', 'admin@inventario.com', 'admin123', 'Admin');
+  ```
+  
+  <Tip>
+    Después de crear las tablas, puedes iniciar sesión con:
+    - **Correo:** admin@inventario.com
+    - **Contraseña:** admin123
+  </Tip>
+</Accordion>
+
+---
+
+## Problemas de Autenticación
+
+<Accordion title="No puedo iniciar sesión - Usuario no encontrado">
+  ### Descripción
+  El sistema muestra "Usuario no encontrado" al intentar ingresar.
+  
+  ### Causa
+  No existen usuarios registrados en la tabla `usuarios`.
+  
+  ### Solución
+  
+  1. Abre phpMyAdmin: `http://localhost/phpmyadmin`
+  2. Selecciona la base de datos `bd_inventario`
+  3. Haz clic en la tabla `usuarios`
+  4. Pestaña **Insertar**
+  5. Agrega un usuario de prueba:
+  
+  | Campo | Valor |
+  |-------|-------|
+  | nombre | Administrador |
+  | correo | admin@test.com |
+  | contraseña | admin123 |
+  | rol | Admin |
+  
+  6. Haz clic en **Continuar**
+  
+  Ahora puedes iniciar sesión con:
+  - **Correo:** admin@test.com
+  - **Contraseña:** admin123
+</Accordion>
+
+<Accordion title="Error: Contraseña incorrecta (pero sé que es correcta)">
+  ### Descripción
+  El sistema indica que la contraseña es incorrecta incluso cuando estás seguro de que es correcta.
+  
+  ### Causa
+  Posibles espacios en blanco o problemas de codificación en la contraseña almacenada.
+  
+  ### Solución
+  
+  1. Abre phpMyAdmin
+  2. Navega a `bd_inventario` > `usuarios`
+  3. Haz clic en **Examinar**
+  4. Localiza tu usuario y haz clic en **Editar**
+  5. Actualiza el campo `contraseña` con una nueva contraseña sin espacios
+  6. Guarda los cambios
+  
+  <Warning>
+    El sistema actual NO usa hash de contraseñas (comparación directa). En producción, implementa `password_hash()` y `password_verify()`.
+  </Warning>
+  
+  ### Implementar Hashing Seguro (Recomendado)
+  
+  Actualiza `auth/login.php:16` de:
+  
+  ```php
+  if ($password == $usuario['contraseña']) {
+  ```
+  
+  A:
+  
+  ```php
+  if (password_verify($password, $usuario['contraseña'])) {
+  ```
+  
+  Y al crear usuarios, usa:
+  
+  ```php
+  $hash = password_hash($password, PASSWORD_DEFAULT);
+  ```
+</Accordion>
+
+<Accordion title="Sesión expira constantemente">
+  ### Descripción
+  La sesión se cierra automáticamente después de unos minutos.
+  
+  ### Causa
+  El tiempo de vida de las sesiones PHP es muy corto.
+  
+  ### Solución
+  
+  Edita el archivo `php.ini` de XAMPP:
+  
+  **Windows:** `C:\xampp\php\php.ini`  
+  **Linux:** `/opt/lampp/etc/php.ini`
+  
+  Busca y modifica:
+  
+  ```ini
+  session.gc_maxlifetime = 3600    ; Sesión dura 1 hora
+  session.cookie_lifetime = 3600   ; Cookie dura 1 hora
+  ```
+  
+  Reinicia Apache desde el panel de XAMPP.
+  
+  <Tip>
+    Después de modificar php.ini, siempre reinicia Apache para aplicar los cambios.
+  </Tip>
+</Accordion>
+
+<Accordion title="Redirige al login después de iniciar sesión correctamente">
+  ### Descripción
+  El sistema redirige inmediatamente al login después de autenticarse.
+  
+  ### Causa
+  Las sesiones PHP no están funcionando correctamente o hay redirecciones en bucle.
+  
+  ### Solución
+  
+  1. Verifica que `session_start()` esté al inicio de cada archivo PHP
+  2. Comprueba que no haya salida antes de `session_start()`
+  3. Verifica la configuración de sesiones en `php.ini`:
+  
+  ```ini
+  session.save_handler = files
+  session.save_path = "C:/xampp/tmp"  ; Windows
+  ; session.save_path = "/tmp"        ; Linux
+  ```
+  
+  4. Asegúrate de que la carpeta de sesiones tenga permisos de escritura
+  
+  **En Windows:**
+  ```bash
+  dir C:\xampp\tmp
+  ```
+  
+  **En Linux:**
+  ```bash
+  ls -la /tmp
+  sudo chmod 1777 /tmp
+  ```
+  
+  5. Limpia las cookies del navegador y vuelve a intentar
+</Accordion>
+
+---
+
+## Problemas con Apache
+
+<Accordion title="Apache no inicia - Puerto 80 ocupado">
+  ### Descripción del Error
+  
+  ```
+  Error: Apache shutdown unexpectedly.
+  Port 80 in use by "Unable to open process" with PID 4!
+  ```
+  
+  ### Causa
+  Otro servicio (generalmente IIS o Skype) está usando el puerto 80.
+  
+  ### Solución 1: Identificar el Proceso
+  
+  **En Windows:**
+  ```bash
+  netstat -ano | findstr :80
+  ```
+  
+  Detén el proceso que usa el puerto 80.
+  
+  ### Solución 2: Cambiar Puerto de Apache
+  
+  1. En el panel de XAMPP, haz clic en **Config** (Apache) > **httpd.conf**
+  2. Busca la línea:
+     ```apache
+     Listen 80
+     ```
+  3. Cámbiala por:
+     ```apache
+     Listen 8080
+     ```
+  4. Busca también:
+     ```apache
+     ServerName localhost:80
+     ```
+  5. Cámbiala por:
+     ```apache
+     ServerName localhost:8080
+     ```
+  6. Guarda el archivo y reinicia Apache
+  7. Accede al sistema usando: `http://localhost:8080/inventario`
+  
+  <Warning>
+    Si cambias el puerto, debes incluirlo en todas las URLs del sistema.
+  </Warning>
+</Accordion>
+
+<Accordion title="Error 403 Forbidden al acceder a localhost">
+  ### Descripción
+  El navegador muestra "403 Forbidden" al intentar acceder al sistema.
+  
+  ### Causa
+  Permisos incorrectos en la carpeta `htdocs` o configuración de Apache restrictiva.
+  
+  ### Solución 1: Verificar Permisos
+  
+  **En Windows:**
+  1. Clic derecho en `C:\xampp\htdocs`
+  2. Propiedades > Seguridad
+  3. Asegurar que "Usuarios" tengan permisos de Lectura y Ejecución
+  
+  **En Linux:**
+  ```bash
+  sudo chmod -R 755 /opt/lampp/htdocs
+  sudo chown -R daemon:daemon /opt/lampp/htdocs
+  ```
+  
+  ### Solución 2: Verificar Configuración de Apache
+  
+  Edita `httpd.conf`:
+  
+  ```apache
+  <Directory "/opt/lampp/htdocs">
+      Options Indexes FollowSymLinks
+      AllowOverride All
+      Require all granted  # Asegúrate de que diga 'granted'
+  </Directory>
+  ```
+  
+  Reinicia Apache.
+</Accordion>
+
+<Accordion title="Página en blanco sin errores">
+  ### Descripción
+  El navegador muestra una página completamente en blanco.
+  
+  ### Causa
+  Errores PHP fatales que no se muestran en pantalla.
+  
+  ### Solución
+  
+  Habilita la visualización de errores PHP. Edita `php.ini`:
+  
+  ```ini
+  display_errors = On
+  error_reporting = E_ALL
+  log_errors = On
+  error_log = "C:/xampp/php/logs/php_error_log"  ; Windows
+  ; error_log = "/opt/lampp/logs/php_error_log"  ; Linux
+  ```
+  
+  Reinicia Apache y recarga la página. Ahora verás los errores específicos.
+  
+  <Tip>
+    Después de identificar y corregir el error, desactiva `display_errors` en producción.
+  </Tip>
+</Accordion>
+
+---
+
+## Problemas con Permisos de Archivos
+
+<Accordion title="Error: Cannot modify header information">
+  ### Descripción del Error
+  
+  ```
+  Warning: Cannot modify header information - headers already sent by...
+  ```
+  
+  ### Causa
+  Hay salida (texto, espacios, BOM) antes de funciones como `header()` o `session_start()`.
+  
+  ### Solución
+  
+  1. Verifica que **NO** haya espacios antes de `<?php` en los archivos
+  2. Asegúrate de que no haya `?>` al final de archivos PHP puros
+  3. Guarda los archivos con codificación **UTF-8 sin BOM**
+  
+  **Ejemplo incorrecto:**
+  ```php
+  
+  <?php  // ← Espacio/línea en blanco ANTES de <?php
+  session_start();
+  ```
+  
+  **Ejemplo correcto:**
+  ```php
+  <?php  // ← Sin espacios antes
+  session_start();
+  ```
+  
+  ### En Visual Studio Code:
+  1. Abre el archivo con el error
+  2. Clic en la esquina inferior derecha donde dice "UTF-8"
+  3. Selecciona **"Save with Encoding"**
+  4. Elige **"UTF-8"** (sin BOM)
+</Accordion>
+
+<Accordion title="No se pueden crear/editar productos">
+  ### Descripción
+  Al intentar agregar o editar productos, no se guardan los cambios.
+  
+  ### Causa
+  Problemas con permisos de escritura o errores en la consulta SQL.
+  
+  ### Solución
+  
+  1. Verifica que los servicios Apache y MySQL estén activos
+  2. Revisa los errores en el navegador (F12 > Consola)
+  3. Verifica el log de errores de PHP:
+  
+  **Windows:** `C:\xampp\php\logs\php_error_log`  
+  **Linux:** `/opt/lampp/logs/php_error_log`
+  
+  4. Prueba la conexión directamente:
+  
+  ```php
+  <?php
+  include("config/conexion.php");
+  
+  if ($conn->ping()) {
+      echo "Conexión exitosa";
+  } else {
+      echo "Error: " . $conn->error;
+  }
+  ?>
+  ```
+  
+  5. Verifica que la tabla `productos` existe:
+  
+  ```sql
+  SHOW TABLES LIKE 'productos';
+  ```
+</Accordion>
+
+---
+
+## Problemas de Rendimiento
+
+<Accordion title="El sistema es muy lento">
+  ### Causa
+  Configuración insuficiente de recursos o consultas SQL no optimizadas.
+  
+  ### Solución
+  
+  1. **Incrementa memoria de PHP** en `php.ini`:
+     ```ini
+     memory_limit = 256M
+     max_execution_time = 300
+     ```
+  
+  2. **Optimiza MySQL** editando `my.ini`:
+     ```ini
+     [mysqld]
+     innodb_buffer_pool_size = 256M
+     key_buffer_size = 128M
+     max_connections = 100
+     ```
+  
+  3. **Agrega índices** a las tablas:
+     ```sql
+     -- En phpMyAdmin > SQL
+     ALTER TABLE productos ADD INDEX idx_codigo (codigo);
+     ALTER TABLE movimientos ADD INDEX idx_producto (producto_id);
+     ALTER TABLE movimientos ADD INDEX idx_fecha (fecha);
+     ```
+  
+  4. Reinicia Apache y MySQL después de los cambios.
+  
+  <Tip>
+    Si tienes muchos registros, considera implementar paginación en las vistas de listado.
+  </Tip>
+</Accordion>
+
+<Accordion title="phpMyAdmin es lento o no carga">
+  ### Causa
+  Configuración predeterminada de phpMyAdmin con tabas grandes.
+  
+  ### Solución
+  
+  Edita `C:\xampp\phpMyAdmin\config.inc.php` (Windows) o `/opt/lampp/phpmyadmin/config.inc.php` (Linux):
+  
+  ```php
+  $cfg['MaxRows'] = 50;  // Reducir filas mostradas
+  $cfg['RowActionLinksWithoutUnique'] = true;
+  $cfg['ExecTimeLimit'] = 300;
+  ```
+  
+  Reinicia Apache.
+</Accordion>
+
+---
+
+## Herramientas de Diagnóstico
+
+### Verificar Estado del Sistema
+
+Crea un archivo `diagnostico.php` en la carpeta raíz:
+
+```php
+<?php
+echo "<h2>Diagnóstico del Sistema</h2>";
+
+// Versión PHP
+echo "<p><strong>PHP:</strong> " . phpversion() . "</p>";
+
+// Extensiones
+echo "<p><strong>mysqli:</strong> " . (extension_loaded('mysqli') ? '✓' : '✗') . "</p>";
+echo "<p><strong>session:</strong> " . (extension_loaded('session') ? '✓' : '✗') . "</p>";
+
+// Conexión MySQL
+include("config/conexion.php");
+if ($conn->ping()) {
+    echo "<p><strong>MySQL:</strong> ✓ Conectado</p>";
+    echo "<p><strong>Base de datos:</strong> " . $conn->get_server_info() . "</p>";
+} else {
+    echo "<p><strong>MySQL:</strong> ✗ Error: " . $conn->error . "</p>";
+}
+
+// Sesiones
+session_start();
+echo "<p><strong>Sesiones:</strong> " . (session_status() == PHP_SESSION_ACTIVE ? '✓' : '✗') . "</p>";
+
+// Permisos
+echo "<p><strong>Permisos de escritura:</strong> " . (is_writable(__DIR__) ? '✓' : '✗') . "</p>";
+?>
+```
+
+Accede a `http://localhost/inventario/diagnostico.php`
+
+<Warning>
+  Elimina este archivo después de diagnosticar el problema por seguridad.
+</Warning>
+
+---
+
+## Obtener Ayuda Adicional
+
+<CardGroup cols={2}>
+  <Card title="Requisitos del Sistema" icon="list" href="/reference/requirements">
+    Verifica que cumples con todos los requisitos
+  </Card>
+  <Card title="Instalación" icon="download" href="/installation">
+    Revisa la guía de instalación paso a paso
+  </Card>
+  <Card title="Configuración" icon="gear" href="/configuration">
+    Configura correctamente la base de datos
+  </Card>
+  <Card title="GitHub Issues" icon="github" href="https://github.com">
+    Reporta bugs o solicita ayuda
+  </Card>
+</CardGroup>
+
+<Tip>
+  Si ninguna solución funciona, verifica los logs de Apache y MySQL en la carpeta `xampp/apache/logs/` y `xampp/mysql/data/`.
+</Tip>

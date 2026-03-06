@@ -1,0 +1,504 @@
+---
+title: Roles de Usuario
+description: Sistema de roles Admin y Empleado con control de acceso basado en permisos
+---
+
+# Roles de Usuario
+
+El sistema INVENTO implementa un sistema básico de roles que permite diferenciar entre administradores con acceso completo y empleados con permisos limitados.
+
+## Roles Disponibles
+
+El sistema soporta dos roles principales almacenados en la tabla `usuarios`:
+
+<CardGroup cols={2}>
+  <Card title="Admin" icon="user-shield" color="#4A90E2">
+    **Administrador del sistema**
+    
+    Permisos completos:
+    - Gestión completa de productos (CRUD)
+    - Registrar entradas y salidas
+    - Eliminar productos
+    - Modificar precios y códigos
+    - Gestionar usuarios (futuro)
+  </Card>
+  
+  <Card title="Empleado" icon="user" color="#6BA3E8">
+    **Usuario operativo**
+    
+    Permisos limitados:
+    - Ver lista de productos
+    - Registrar movimientos de inventario
+    - Consultar stock disponible
+    - Sin permisos para eliminar
+    - Sin acceso a configuración
+  </Card>
+</CardGroup>
+
+<Note>
+  **Estado actual**: El sistema almacena y muestra el rol del usuario (`$_SESSION['rol']`), pero actualmente no implementa restricciones de acceso basadas en roles. Todas las páginas son accesibles para cualquier usuario autenticado.
+</Note>
+
+## Estructura de la Tabla Usuarios
+
+Los usuarios se almacenan en la tabla `usuarios` con la siguiente estructura:
+
+<ParamField path="id" type="integer" required>
+  Identificador único del usuario. Clave primaria auto-incremental.
+</ParamField>
+
+<ParamField path="nombre" type="string" required>
+  Nombre completo del usuario.
+</ParamField>
+
+<ParamField path="correo" type="string" required>
+  Dirección de correo electrónico. Se usa como nombre de usuario para login.
+</ParamField>
+
+<ParamField path="contraseña" type="string" required>
+  Contraseña del usuario. Actualmente se almacena en texto plano (no recomendado para producción).
+</ParamField>
+
+<ParamField path="rol" type="enum('Admin','Empleado')" required>
+  Rol del usuario que determina sus permisos en el sistema.
+</ParamField>
+
+## Almacenamiento del Rol en Sesión
+
+Cuando un usuario inicia sesión (`auth/login.php:17-18`), el sistema almacena su rol en la sesión:
+
+```php auth/login.php
+$_SESSION['usuario'] = $usuario['nombre'];
+$_SESSION['rol'] = $usuario['rol'];
+```
+
+Esta variable de sesión está disponible en todas las páginas del sistema y se puede usar para:
+- Mostrar el rol del usuario en la interfaz
+- Controlar qué opciones del menú se muestran
+- Validar permisos antes de ejecutar acciones sensibles
+
+## Mostrar Rol del Usuario
+
+La página principal muestra el rol del usuario autenticado (`index.php:18-19`):
+
+```php index.php
+<h1>Bienvenido, <?php echo $_SESSION['usuario']; ?></h1>
+<p>Rol: <?php echo $_SESSION['rol']; ?></p>
+```
+
+Esto confirma al usuario con qué nivel de acceso ha iniciado sesión.
+
+## Implementar Control de Acceso por Roles
+
+Aunque el sistema actual no implementa restricciones por roles, aquí te mostramos cómo hacerlo:
+
+### Proteger Funciones Específicas
+
+Puedes restringir acciones específicas según el rol:
+
+```php
+<?php
+session_start();
+include("../config/conexion.php");
+
+// Verificar que el usuario esté autenticado
+if (!isset($_SESSION['usuario'])) {
+    header("Location: ../auth/login.php");
+    exit();
+}
+
+// Verificar que el usuario sea Admin
+if ($_SESSION['rol'] !== 'Admin') {
+    die("<h2>Acceso Denegado</h2>
+         <p>Esta función requiere permisos de Administrador.</p>
+         <a href='../index.php'>Volver al inicio</a>");
+}
+
+// Código de la función protegida aquí
+?>
+```
+
+<Tip>
+  Coloca esta validación al inicio de páginas sensibles como `productos/eliminar.php` o en funciones administrativas.
+</Tip>
+
+### Ocultar Opciones del Menú
+
+Muestra u oculta opciones del menú según el rol:
+
+```php productos/listar.php
+<h2>Lista de productos</h2>
+
+<?php if ($_SESSION['rol'] === 'Admin') { ?>
+    <a href="crear.php">Nuevo producto</a>
+<?php } ?>
+
+<table border="1">
+    <!-- Tabla de productos -->
+    <?php while ($p = $resultado->fetch_assoc()) { ?>
+    <tr>
+        <td><?= $p['nombre'] ?></td>
+        <td>
+            <?php if ($_SESSION['rol'] === 'Admin') { ?>
+                <a href="editar.php?id=<?= $p['id'] ?>">Editar</a>
+                |
+                <a href="eliminar.php?id=<?= $p['id'] ?>"
+                   onclick="return confirm('¿Eliminar producto?')">
+                   Eliminar
+                </a>
+            <?php } else { ?>
+                <span style="color: gray;">Sin permisos</span>
+            <?php } ?>
+        </td>
+    </tr>
+    <?php } ?>
+</table>
+```
+
+### Matriz de Permisos Recomendada
+
+Esta tabla muestra los permisos sugeridos para cada rol:
+
+| Funcionalidad | Admin | Empleado |
+|--------------|-------|----------|
+| Ver productos | ✅ | ✅ |
+| Crear productos | ✅ | ❌ |
+| Editar productos | ✅ | ❌ |
+| Eliminar productos | ✅ | ❌ |
+| Ver stock | ✅ | ✅ |
+| Registrar entradas | ✅ | ✅ |
+| Registrar salidas | ✅ | ✅ |
+| Ver historial de movimientos | ✅ | ✅ |
+| Gestionar usuarios | ✅ | ❌ |
+| Modificar configuración | ✅ | ❌ |
+| Ver reportes | ✅ | ✅ |
+| Exportar datos | ✅ | ❌ |
+
+## Crear Usuarios
+
+Actualmente, el sistema no incluye una interfaz para crear usuarios. Puedes crear usuarios directamente en la base de datos:
+
+### Crear un Usuario Admin
+
+```sql
+INSERT INTO usuarios (nombre, correo, contraseña, rol)
+VALUES ('Juan Pérez', 'admin@empresa.com', 'admin123', 'Admin');
+```
+
+### Crear un Usuario Empleado
+
+```sql
+INSERT INTO usuarios (nombre, correo, contraseña, rol)
+VALUES ('María García', 'maria@empresa.com', 'empleado123', 'Empleado');
+```
+
+<Warning>
+  **Contraseñas en texto plano**: Este método almacena contraseñas sin cifrar, lo cual es inseguro. En producción, usa `password_hash()` para cifrar las contraseñas:
+  
+  ```php
+  $hash = password_hash('contraseña', PASSWORD_DEFAULT);
+  // Luego inserta $hash en la base de datos
+  ```
+</Warning>
+
+## Implementar Gestión de Usuarios
+
+Para una implementación completa, considera crear un módulo de gestión de usuarios:
+
+<Steps>
+  <Step title="Crear página de listado de usuarios">
+    `usuarios/listar.php` - Muestra todos los usuarios registrados con su rol.
+    
+    ```php
+    <?php
+    session_start();
+    include("../config/conexion.php");
+    
+    // Solo Admin puede ver usuarios
+    if ($_SESSION['rol'] !== 'Admin') {
+        die("Acceso denegado");
+    }
+    
+    $usuarios = $conn->query("SELECT id, nombre, correo, rol FROM usuarios");
+    ?>
+    
+    <h2>Gestión de Usuarios</h2>
+    <a href="crear.php">Nuevo usuario</a>
+    
+    <table border="1">
+        <tr>
+            <th>Nombre</th>
+            <th>Correo</th>
+            <th>Rol</th>
+            <th>Acciones</th>
+        </tr>
+        <?php while ($u = $usuarios->fetch_assoc()) { ?>
+        <tr>
+            <td><?= $u['nombre'] ?></td>
+            <td><?= $u['correo'] ?></td>
+            <td><?= $u['rol'] ?></td>
+            <td>
+                <a href="editar.php?id=<?= $u['id'] ?>">Editar</a>
+                |
+                <a href="eliminar.php?id=<?= $u['id'] ?>">Eliminar</a>
+            </td>
+        </tr>
+        <?php } ?>
+    </table>
+    ```
+  </Step>
+  
+  <Step title="Crear formulario de nuevo usuario">
+    `usuarios/crear.php` - Formulario para registrar nuevos usuarios.
+    
+    ```php
+    <?php
+    session_start();
+    include("../config/conexion.php");
+    
+    if ($_SESSION['rol'] !== 'Admin') {
+        die("Acceso denegado");
+    }
+    
+    if (isset($_POST['guardar'])) {
+        $nombre = $_POST['nombre'];
+        $correo = $_POST['correo'];
+        $password = $_POST['password'];
+        $rol = $_POST['rol'];
+        
+        // Cifrar contraseña
+        $hash = password_hash($password, PASSWORD_DEFAULT);
+        
+        $stmt = $conn->prepare(
+            "INSERT INTO usuarios (nombre, correo, contraseña, rol) 
+             VALUES (?, ?, ?, ?)"
+        );
+        $stmt->bind_param("ssss", $nombre, $correo, $hash, $rol);
+        
+        if ($stmt->execute()) {
+            header("Location: listar.php");
+            exit();
+        }
+    }
+    ?>
+    
+    <h2>Crear Usuario</h2>
+    <form method="POST">
+        Nombre:<br>
+        <input type="text" name="nombre" required><br><br>
+        
+        Correo:<br>
+        <input type="email" name="correo" required><br><br>
+        
+        Contraseña:<br>
+        <input type="password" name="password" required><br><br>
+        
+        Rol:<br>
+        <select name="rol" required>
+            <option value="Admin">Admin</option>
+            <option value="Empleado">Empleado</option>
+        </select><br><br>
+        
+        <button name="guardar">Guardar</button>
+    </form>
+    ```
+  </Step>
+  
+  <Step title="Actualizar página de login">
+    Modifica `auth/login.php:16` para usar `password_verify()` si implementas cifrado de contraseñas:
+    
+    ```php
+    // En lugar de:
+    if ($password == $usuario['contraseña']) {
+    
+    // Usa:
+    if (password_verify($password, $usuario['contraseña'])) {
+        // Login exitoso
+    }
+    ```
+  </Step>
+</Steps>
+
+## Validación de Permisos con Funciones Helper
+
+Para evitar repetir código, crea funciones helper:
+
+```php helpers.php
+<?php
+function requireAdmin() {
+    session_start();
+    if (!isset($_SESSION['usuario'])) {
+        header("Location: /inventario/auth/login.php");
+        exit();
+    }
+    if ($_SESSION['rol'] !== 'Admin') {
+        die("<h2>Acceso Denegado</h2>
+             <p>Esta función requiere permisos de Administrador.</p>
+             <a href='/inventario/index.php'>Volver</a>");
+    }
+}
+
+function requireAuth() {
+    session_start();
+    if (!isset($_SESSION['usuario'])) {
+        header("Location: /inventario/auth/login.php");
+        exit();
+    }
+}
+
+function isAdmin() {
+    return isset($_SESSION['rol']) && $_SESSION['rol'] === 'Admin';
+}
+
+function isEmpleado() {
+    return isset($_SESSION['rol']) && $_SESSION['rol'] === 'Empleado';
+}
+?>
+```
+
+Luego úsalas en tus páginas:
+
+```php productos/eliminar.php
+<?php
+include("../helpers.php");
+include("../config/conexion.php");
+
+requireAdmin(); // Solo Admin puede eliminar
+
+$id = $_GET['id'];
+$conn->query("DELETE FROM productos WHERE id=$id");
+header("Location: listar.php");
+exit();
+?>
+```
+
+## Auditoría de Acciones por Usuario
+
+Para rastrear quién realizó qué acciones, modifica tus tablas para incluir el usuario:
+
+### Agregar Usuario a Movimientos
+
+```sql
+ALTER TABLE movimientos ADD COLUMN usuario_id INT AFTER cantidad;
+ALTER TABLE movimientos ADD FOREIGN KEY (usuario_id) REFERENCES usuarios(id);
+```
+
+Luego, al registrar movimientos:
+
+```php movimientos/entrada.php
+$usuario_id = obtenerUsuarioIdPorNombre($_SESSION['usuario']);
+
+$stmt = $conn->prepare(
+    "INSERT INTO movimientos (producto_id, tipo, cantidad, usuario_id) 
+     VALUES (?, ?, ?, ?)"
+);
+$stmt->bind_param("isii", $producto_id, $tipo, $cantidad, $usuario_id);
+$stmt->execute();
+```
+
+<Tip>
+  Esto te permite saber exactamente quién registró cada movimiento, útil para auditorías y solución de problemas.
+</Tip>
+
+## Roles Adicionales (Futuro)
+
+Para sistemas más complejos, considera agregar roles adicionales:
+
+<CardGroup cols={3}>
+  <Card title="Supervisor" icon="user-tie">
+    Permisos intermedios entre Admin y Empleado. Puede ver reportes y aprobar movimientos.
+  </Card>
+  
+  <Card title="Almacenista" icon="warehouse">
+    Especializado en movimientos de inventario. Acceso completo a entradas/salidas pero limitado en productos.
+  </Card>
+  
+  <Card title="Contador" icon="calculator">
+    Solo lectura. Acceso a reportes y exportación de datos para contabilidad.
+  </Card>
+</CardGroup>
+
+Para implementar múltiples roles, considera usar una tabla de permisos en lugar de enum:
+
+```sql
+CREATE TABLE permisos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(50) UNIQUE,
+    descripcion TEXT
+);
+
+CREATE TABLE usuario_permisos (
+    usuario_id INT,
+    permiso_id INT,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id),
+    FOREIGN KEY (permiso_id) REFERENCES permisos(id),
+    PRIMARY KEY (usuario_id, permiso_id)
+);
+```
+
+## Solución de Problemas
+
+<Accordion title="El rol no se muestra correctamente">
+  Verifica que:
+  - La columna `rol` en la tabla `usuarios` tenga el valor correcto
+  - El login esté guardando `$_SESSION['rol']` correctamente
+  - No estés sobrescribiendo `$_SESSION['rol']` en ningún lugar
+  - La sesión no haya expirado
+</Accordion>
+
+<Accordion title="Las restricciones por rol no funcionan">
+  El sistema actual no implementa restricciones automáticamente. Debes:
+  - Agregar validaciones manualmente en cada página sensible
+  - Usar las funciones helper sugeridas arriba
+  - Verificar que `$_SESSION['rol']` exista antes de comparar
+</Accordion>
+
+<Accordion title="No puedo cambiar el rol de un usuario">
+  Para cambiar el rol de un usuario existente:
+  
+  ```sql
+  UPDATE usuarios 
+  SET rol = 'Admin' 
+  WHERE correo = 'usuario@empresa.com';
+  ```
+  
+  El cambio tomará efecto la próxima vez que el usuario inicie sesión.
+</Accordion>
+
+## Seguridad
+
+<Warning>
+  **Validación del lado del servidor**: Nunca confíes solo en ocultar elementos de la interfaz. Un atacante puede enviar solicitudes directas a páginas protegidas. Siempre valida permisos en el servidor:
+  
+  ```php
+  // INCORRECTO - Solo ocultar el botón
+  <?php if ($_SESSION['rol'] === 'Admin') { ?>
+      <a href="eliminar.php?id=5">Eliminar</a>
+  <?php } ?>
+  
+  // CORRECTO - Validar también en eliminar.php
+  <?php
+  if ($_SESSION['rol'] !== 'Admin') {
+      die("Acceso denegado");
+  }
+  // Procesar eliminación
+  ?>
+  ```
+</Warning>
+
+## Próximos Pasos
+
+<CardGroup cols={2}>
+  <Card title="Autenticación" icon="lock" href="/guides/authentication">
+    Aprende cómo funciona el sistema de login
+  </Card>
+  <Card title="Configuración" icon="gear" href="/configuration">
+    Configura opciones de seguridad avanzadas
+  </Card>
+  <Card title="Estructura de Base de Datos" icon="database" href="/development/database-schema">
+    Entiende la tabla de usuarios
+  </Card>
+  <Card title="Contribuir" icon="code" href="/development/contributing">
+    Ayuda a implementar gestión de usuarios
+  </Card>
+</CardGroup>
