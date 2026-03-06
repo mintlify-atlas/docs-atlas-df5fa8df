@@ -35,7 +35,7 @@ CREATE TABLE usuarios (
     nombre VARCHAR(100) NOT NULL,
     correo VARCHAR(100) UNIQUE NOT NULL,
     contraseña VARCHAR(255) NOT NULL,
-    rol ENUM('admin', 'usuario') DEFAULT 'usuario',
+    rol ENUM('Admin', 'Empleado') DEFAULT 'Empleado',
     fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
@@ -45,7 +45,7 @@ CREATE TABLE usuarios (
 - `nombre` - User's full name
 - `correo` - Email address (unique, used for login)
 - `contraseña` - Password (currently stored in plain text)
-- `rol` - User role (admin or usuario)
+- `rol` - User role ('Admin' or 'Empleado')
 - `fecha_registro` - Timestamp of user registration
 
 </Accordion>
@@ -275,7 +275,7 @@ CREATE TABLE movimientos (
 
 -- Insert test user
 INSERT INTO usuarios (nombre, correo, contraseña, rol) 
-VALUES ('Admin', 'admin@example.com', 'admin123', 'admin');
+VALUES ('Admin', 'admin@example.com', 'admin123', 'Admin');
 ```
 
 ## Security Considerations
